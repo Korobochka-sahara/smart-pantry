@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, UniqueConstraint, func, Integer, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, UniqueConstraint, func, Integer, ForeignKey, Enum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
+from app.enums.household import HouseholdRole
 
 
 class HouseholdMember(Base):
@@ -26,9 +27,9 @@ class HouseholdMember(Base):
         nullable=False,
     )
 
-    role: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
+    role: Mapped[HouseholdRole] = mapped_column(
+    Enum(HouseholdRole, name="household_role"),
+    nullable=False,
     )
 
     joined_at: Mapped[datetime] = mapped_column(
@@ -36,6 +37,8 @@ class HouseholdMember(Base):
         server_default=func.now(),
         nullable=False,
     )
+
+    user = relationship("User")
     
     __table_args__ = (
         UniqueConstraint('household_id', 'user_id', name='uq_household_member'),
