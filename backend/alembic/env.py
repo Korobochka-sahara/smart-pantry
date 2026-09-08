@@ -18,6 +18,7 @@ from app.models.inventory_item import InventoryItem
 from app.models.receipt import Receipt
 from app.models.receipt_item import ReceiptItem
 from app.models.tracked_product import TrackedProduct
+from app.models.refresh_token import RefreshToken
 
 from alembic import context
 

@@ -2,7 +2,6 @@ from sqlalchemy import select
 
 from pwdlib import PasswordHash
 from sqlalchemy.orm import Session
-from pwdlib import PasswordHash
 
 from app.models.user import User
 from app.schemas.auth import RegisterRequest
@@ -48,20 +47,46 @@ def authenticate_user(db: Session, email: str, password: str) -> User | None:
 
     return user
 
-def save_refresh_token(db: Session, user_id: int, refresh_token: str) -> RefreshToken:
-    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+def save_refresh_token(
+    db: Session,
+    user_id: int,
+    refresh_token: str,
+) -> RefreshToken:
+    token_hash = hashlib.sha256(
+        refresh_token.encode()
+    ).hexdigest()
 
     refresh_token_record = RefreshToken(
         user_id=user_id,
         token_hash=token_hash,
-        expires_at=datetime.now(timezone.utc) + timedelta(
-            days=REFRESH_TOKEN_EXPIRE_DAYS
+        expires_at=(
+            datetime.now(timezone.utc)
+            + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         ),
         created_at=datetime.now(timezone.utc),
     )
 
     db.add(refresh_token_record)
-    db.commit()
-    db.refresh(refresh_token_record)
 
     return refresh_token_record
+
+
+def revoke_refresh_token(
+    db: Session,
+    refresh_token: str,
+) -> None:
+    token_hash = hashlib.sha256(
+        refresh_token.encode()
+    ).hexdigest()
+
+    refresh_token_record = db.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == token_hash
+        )
+    )
+
+    if (
+        refresh_token_record is not None
+        and refresh_token_record.revoked_at is None
+    ):
+        refresh_token_record.revoked_at = datetime.now(timezone.utc)
