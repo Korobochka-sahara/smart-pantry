@@ -159,8 +159,7 @@ backend/
 │   │   └── household.py
 │   │
 │   ├── models/
-│   │   ├── ...
-│   │   └── refresh_token.py
+│   │   ├── category.py, household_member.py, household.py, inventory_event.py, inventory_item.py, product.py,              |   |         receipt_item.py, receipt.py, refresh_token.py, tracked_product.py, user.py
 │   │
 │   ├── schemas/
 │   │   ├── auth.py
@@ -771,11 +770,7 @@ DEPLETED
 
 Важно отделять:
 
-количество
-
-от
-
-статуса.
+'количество' от 'статуса'.
 
 Например продукт может иметь quantity = 1, но быть OPENED.
 
@@ -1136,7 +1131,7 @@ GET /
 * household roles;
 * household creation;
 * 5-household creation limit;
-* 100-member limit;
+* 20-member limit;
 * household listing;
 * household access checking;
 * member listing;
