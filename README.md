@@ -150,6 +150,7 @@ backend/
 │   │   ├── **init**.py
 │   │   ├── auth.py
 │   │   └── household.py
+│   │   └── product.py
 │   │
 │   ├── db/
 │   │   └── database.py
@@ -157,6 +158,7 @@ backend/
 │   ├── enums/
 │   │   ├── **init**.py
 │   │   └── household.py
+│   │   └── cstegory.py
 │   │
 │   ├── models/
 │   │   ├── ...
@@ -165,10 +167,12 @@ backend/
 │   ├── schemas/
 │   │   ├── auth.py
 │   │   └── household.py
+│   │   └── product.py
 │   │
 │   ├── services/
 │   │   ├── auth_service.py
 │   │   └── household_service.py
+│   │   └── poduct_service.py
 │   │
 │   ├── security.py
 │   └── main.py
@@ -239,7 +243,6 @@ db: Session = Depends(get_db)
 * user
 * household
 * household_member
-* category
 * product
 * inventory_item
 * receipt
@@ -667,7 +670,7 @@ InventoryItem.
 * barcode
 * name
 * brand
-* category_id
+* category
 * unit
 * package_quantity
 * package_unit
@@ -678,7 +681,7 @@ Barcode индексируется и может быть NULL.
 
 ---
 
-# 25. Category
+# 25. Category enum
 
 Category предназначена для классификации продуктов.
 
@@ -1146,6 +1149,7 @@ GET /
 * leaving household;
 * automatic ownership transfer;
 * automatic household deletion when owner leaves alone.
+* product get, create, search
 
 Все эти функции уже тестировались через API и работают.
 
@@ -1159,30 +1163,25 @@ PRODUCT + INVENTORY.
 
 Рекомендуемый порядок:
 
-1. Product model проверить/доделать.
-2. Category.
-3. Product schemas.
-4. Product service.
-5. Product API.
-6. InventoryItem model.
-7. Inventory schemas.
-8. Inventory service.
-9. Inventory CRUD.
-10. Проверка household permissions для inventory.
-11. Inventory events.
-12. TrackedProduct.
-13. Expiry logic.
-14. Shopping/low-stock logic.
-15. Receipt.
-16. ReceiptItem.
-17. OCR.
-18. Product matching.
-19. Notifications.
-20. Redis/Celery.
-21. Android client.
-22. Tests.
-23. Docker.
-24. CI/CD.
+1. InventoryItem model.
+2. Inventory schemas.
+3. Inventory service.
+4. Inventory CRUD.
+5. Проверка household permissions для inventory.
+6. Inventory events.
+7. TrackedProduct.
+8. Expiry logic.
+9. Shopping/low-stock logic.
+10. Receipt.
+11. ReceiptItem.
+12. OCR.
+13. Product matching.
+14. Notifications.
+15. Redis/Celery.
+16. Android client.
+17. Tests.
+18. Docker.
+19. CI/CD.
 
 ---
 
@@ -1386,7 +1385,7 @@ Household subsystem считается практически завершённ
 
 Следующий основной фокус:
 
-PRODUCT + INVENTORY.
+INVENTORY
 
 Первая задача следующего этапа:
 

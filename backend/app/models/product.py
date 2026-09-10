@@ -1,8 +1,9 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Numeric, String, DateTime, UniqueConstraint, func, Integer, ForeignKey, text
+from sqlalchemy import Numeric, String, DateTime, UniqueConstraint, Enum, func, Integer, ForeignKey, text
 from sqlalchemy.orm import Mapped, mapped_column
+from app.enums.category import ProductCategory
 
 from app.db.database import Base
 
@@ -26,11 +27,16 @@ class Product(Base):
     brand: Mapped[str | None] = mapped_column(
         String(100), 
         nullable=True)
-    
-    category_id: Mapped[int | None] = mapped_column(
-        Integer, 
-        ForeignKey("category.id", ondelete="SET NULL"), 
-        nullable=True)
+
+    category: Mapped[ProductCategory] = mapped_column(
+    Enum(
+        ProductCategory,
+        name="product_category",
+        values_callable=lambda enum_class: [
+            item.value for item in enum_class
+        ],
+    ),
+    nullable=False,)
     
     unit: Mapped[str] = mapped_column(
         String(50), 

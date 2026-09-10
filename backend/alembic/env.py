@@ -11,9 +11,7 @@ from app.models.user import User
 from app.models.household_member import HouseholdMember
 from app.models.household import Household
 from app.models.receipt import Receipt
-from app.models.category import Category
 from app.models.product import Product
-from app.models.inventory_event import InventoryEvent
 from app.models.inventory_item import InventoryItem
 from app.models.receipt_item import ReceiptItem
 from app.models.tracked_product import TrackedProduct

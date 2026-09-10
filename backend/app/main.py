@@ -2,6 +2,8 @@ from fastapi import FastAPI
 
 from app.api.auth import router as auth_router
 from app.api.household import router as household_router
+from app.api.product import router as product_router
+from app.api.inventory import router as inventory_router
 
 app = FastAPI(
     title = "Smart Pantry API",
@@ -10,6 +12,8 @@ app = FastAPI(
 
 app.include_router(auth_router)
 app.include_router(household_router)
+app.include_router(product_router)
+app.include_router(inventory_router)
 
 @app.get("/")
 def root():
