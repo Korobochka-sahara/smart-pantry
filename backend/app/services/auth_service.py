@@ -90,3 +90,25 @@ def revoke_refresh_token(
         and refresh_token_record.revoked_at is None
     ):
         refresh_token_record.revoked_at = datetime.now(timezone.utc)
+
+
+def cleanup_refresh_tokens(db: Session) -> int:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+
+    stmt = select(RefreshToken).where(
+        (RefreshToken.expires_at < datetime.now(timezone.utc))
+        |
+        (
+            (RefreshToken.revoked_at.is_not(None))
+            & (RefreshToken.revoked_at < cutoff)
+        )
+    )
+
+    tokens = db.scalars(stmt).all()
+
+    for token in tokens:
+        db.delete(token)
+
+    db.commit()
+
+    return len(tokens)

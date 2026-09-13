@@ -73,7 +73,9 @@ def get_household_inventory(
 ) -> list[InventoryItem]:
     stmt = (
         select(InventoryItem)
-        .where(InventoryItem.household_id == household_id)
+        .where(
+            InventoryItem.household_id == household_id,
+        )
         .order_by(InventoryItem.id)
     )
 
@@ -86,13 +88,17 @@ def create_inventory_item(
     user_id: int,
     item_data: InventoryItemCreate,
 ) -> InventoryItem:
+
     require_household_access(
         db,
         household_id,
         user_id,
     )
 
-    product = db.get(Product, item_data.product_id)
+    product = db.get(
+        Product,
+        item_data.product_id,
+    )
 
     if product is None:
         raise ProductNotFoundError(
@@ -113,7 +119,10 @@ def create_inventory_item(
             user_id=user_id,
             inventory_item_id=existing_item.id,
             item_data=InventoryItemUpdate(
-                quantity=existing_item.quantity + item_data.quantity,
+                quantity=(
+                    existing_item.quantity
+                    + item_data.quantity
+                ),
             ),
         )
 
@@ -137,6 +146,7 @@ def update_inventory_item(
     inventory_item_id: int,
     item_data: InventoryItemUpdate,
 ) -> InventoryItem:
+
     require_household_access(
         db,
         household_id,
@@ -154,12 +164,7 @@ def update_inventory_item(
             "Inventory item not found"
         )
 
-    update_data = item_data.model_dump(
-        exclude_unset=True,
-    )
-
-    for field, value in update_data.items():
-        setattr(item, field, value)
+    item.quantity = item_data.quantity
 
     db.commit()
     db.refresh(item)
@@ -173,6 +178,7 @@ def delete_inventory_item(
     user_id: int,
     inventory_item_id: int,
 ) -> None:
+
     require_household_access(
         db,
         household_id,

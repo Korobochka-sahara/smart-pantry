@@ -1205,8 +1205,6 @@ Products
 ↓
 Inventory
 ↓
-Inventory events
-↓
 Tracking
 ↓
 Receipts
