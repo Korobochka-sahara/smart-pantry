@@ -148,3 +148,66 @@ def client():
     finally:
         client.close()
         app.dependency_overrides.clear()
+
+@pytest.fixture
+def auth_headers():
+    def _auth_headers(token: str) -> dict:
+        return {"Authorization": f"Bearer {token}"}
+    return _auth_headers
+
+@pytest.fixture
+def create_user(client):
+    def _create_user(email="user@example.com", username="user", password="StrongPassword123!"):
+        response = client.post(
+            "/auth/register",
+            json={"email": email, "username": username, "password": password},
+        )
+        assert response.status_code == 201
+        return response.json()
+    return _create_user
+
+@pytest.fixture
+def login_user(client):
+    def _login(email="user@example.com", password="StrongPassword123!"):
+        response = client.post(
+            "/auth/login",
+            json={"email": email, "password": password},
+        )
+        assert response.status_code == 200, f"Login failed: {response.json()}"
+        return response.json()["access_token"]
+    return _login
+
+@pytest.fixture
+def create_household(client, auth_headers):
+    def _create_household(token, name="My Household"):
+        response = client.post(
+            "/households",
+            headers=auth_headers(token),
+            json={"name": name},
+        )
+        assert response.status_code == 201
+        return response.json()
+    return _create_household
+
+@pytest.fixture
+def create_product(client):
+    def _create_product(
+        barcode="4601234567890",
+        name="Milk",
+        brand="Prostokvashino",
+        category="dairy",
+        unit="L",
+        package_quantity=1,
+        package_unit="L",
+    ):
+        response = client.post(
+            "/products",
+            json={
+                "barcode": barcode, "name": name, "brand": brand,
+                "category": category, "unit": unit,
+                "package_quantity": package_quantity, "package_unit": package_unit,
+            },
+        )
+        assert response.status_code == 201
+        return response.json()
+    return _create_product

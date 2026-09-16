@@ -1,35 +1,6 @@
-def create_product(
-    client,
-    barcode="4601234567890",
-    name="Milk",
-    brand="Prostokvashino",
-    category="dairy",
-    unit="L",
-    package_quantity=1,
-    package_unit="L",
-):
-    response = client.post(
-        "/products",
-        json={
-            "barcode": barcode,
-            "name": name,
-            "brand": brand,
-            "category": category,
-            "unit": unit,
-            "package_quantity": package_quantity,
-            "package_unit": package_unit,
-        },
-    )
-
-    assert response.status_code == 201
-
-    return response.json()
-
-
 # ---------------------------------------------------------
 # Создание
 # ---------------------------------------------------------
-
 
 def test_create_product(client):
     response = client.post(
@@ -46,7 +17,6 @@ def test_create_product(client):
     )
 
     assert response.status_code == 201
-
     data = response.json()
 
     assert "id" in data
@@ -73,15 +43,15 @@ def test_create_product_without_barcode(client):
     )
 
     assert response.status_code == 201
-
     data = response.json()
 
     assert data["barcode"] is None
     assert data["name"] == "Apple"
 
 
-def test_create_product_duplicate_barcode(client):
-    create_product(client)
+def test_create_product_duplicate_barcode(client, create_product):
+    # Вызываем фикстуру из conftest.py БЕЗ передачи client
+    create_product(barcode="4601234567890")
 
     response = client.post(
         "/products",
@@ -103,16 +73,13 @@ def test_create_product_duplicate_barcode(client):
 # Получение
 # ---------------------------------------------------------
 
+def test_get_product(client, create_product):
+    # Вызываем фикстуру
+    product = create_product()
 
-def test_get_product(client):
-    product = create_product(client)
-
-    response = client.get(
-        f"/products/{product['id']}",
-    )
+    response = client.get(f"/products/{product['id']}")
 
     assert response.status_code == 200
-
     data = response.json()
 
     assert data["id"] == product["id"]
@@ -121,10 +88,7 @@ def test_get_product(client):
 
 
 def test_get_nonexistent_product(client):
-    response = client.get(
-        "/products/999999",
-    )
-
+    response = client.get("/products/999999")
     assert response.status_code == 404
 
 
@@ -132,16 +96,9 @@ def test_get_nonexistent_product(client):
 # Поиск
 # ---------------------------------------------------------
 
-
-def test_search_product_by_name(client):
+def test_search_product_by_name(client, create_product):
+    create_product(barcode="4601234567890", name="Milk")
     create_product(
-        client,
-        barcode="4601234567890",
-        name="Milk",
-    )
-
-    create_product(
-        client,
         barcode="4601234567891",
         name="Apple Juice",
         brand="Rich",
@@ -150,97 +107,62 @@ def test_search_product_by_name(client):
         package_unit="L",
     )
 
-    response = client.get(
-        "/products/search",
-        params={
-            "q": "Milk",
-        },
-    )
+    response = client.get("/products/search", params={"q": "Milk"})
 
     assert response.status_code == 200
-
     data = response.json()
 
     assert len(data) == 1
     assert data[0]["name"] == "Milk"
 
 
-def test_search_product_by_brand(client):
+def test_search_product_by_brand(client, create_product):
     create_product(
-        client,
         barcode="4601234567890",
         name="Milk",
         brand="Prostokvashino",
     )
 
-    response = client.get(
-        "/products/search",
-        params={
-            "q": "Prostokvashino",
-        },
-    )
+    response = client.get("/products/search", params={"q": "Prostokvashino"})
 
     assert response.status_code == 200
-
     data = response.json()
 
     assert len(data) == 1
     assert data[0]["brand"] == "Prostokvashino"
 
 
-def test_search_product_by_barcode(client):
-    create_product(
-        client,
-        barcode="4601234567890",
-        name="Milk",
-    )
+def test_search_product_by_barcode(client, create_product):
+    create_product(barcode="4601234567890", name="Milk")
 
-    response = client.get(
-        "/products/search",
-        params={
-            "q": "4601234567890",
-        },
-    )
+    response = client.get("/products/search", params={"q": "4601234567890"})
 
     assert response.status_code == 200
-
     data = response.json()
 
     assert len(data) == 1
     assert data[0]["barcode"] == "4601234567890"
 
 
-def test_search_product_case_insensitive(client):
-    create_product(
-        client,
-        name="Milk",
-    )
+def test_search_product_case_insensitive(client, create_product):
+    create_product(name="Milk")
 
-    response = client.get(
-        "/products/search",
-        params={
-            "q": "milk",
-        },
-    )
+    response = client.get("/products/search", params={"q": "milk"})
 
     assert response.status_code == 200
-
     data = response.json()
 
     assert len(data) == 1
     assert data[0]["name"] == "Milk"
 
 
-def test_search_products_returns_multiple_results(client):
+def test_search_products_returns_multiple_results(client, create_product):
     create_product(
-        client,
         barcode="4601234567890",
         name="Milk",
         brand="Prostokvashino",
     )
-
     create_product(
-        client,
         barcode="4601234567891",
         name="Milk Chocolate",
         brand="Alpen Gold",
@@ -250,15 +172,9 @@ def test_search_products_returns_multiple_results(client):
         package_unit="kg",
     )
 
-    response = client.get(
-        "/products/search",
-        params={
-            "q": "Milk",
-        },
-    )
+    response = client.get("/products/search", params={"q": "Milk"})
 
     assert response.status_code == 200
-
     data = response.json()
 
     assert len(data) == 2
