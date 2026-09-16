@@ -4,9 +4,6 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas.household import HouseholdCreate, HouseholdMemberAdd, HouseholdMemberResponse, HouseholdResponse, HouseholdRoleUpdate
 from app.services.household_service import (
-    HouseholdConflictError,
-    HouseholdNotFoundError,
-    HouseholdPermissionError,
     add_household_member,
     create_household,
     get_household_members,
@@ -15,6 +12,11 @@ from app.services.household_service import (
     leave_household,
     remove_household_member,
     update_household_member_role
+)
+from app.services.auxiliary_functions import (
+    HouseholdConflictError,
+    HouseholdNotFoundError,
+    HouseholdPermissionError,
 )
 from app.security import get_current_user
 from app.models.user import User
@@ -38,7 +40,7 @@ def create_household_endpoint(
             current_user.id,
         )
 
-    except ValueError as error:
+    except HouseholdConflictError as error:
         raise HTTPException(
             status_code=409,
             detail=str(error),
@@ -96,7 +98,7 @@ def get_members(
             household_id,
             current_user.id,
         )
-    except ValueError as error:
+    except HouseholdNotFoundError as error:
         raise HTTPException(
             status_code=404,
             detail=str(error),

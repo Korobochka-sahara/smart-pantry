@@ -7,71 +7,18 @@ from app.models.household_member import HouseholdMember
 from app.models.user import User
 from app.schemas.household import HouseholdCreate, HouseholdMemberAdd
 
+from app.services.auxiliary_functions import (
+    HouseholdNotFoundError,
+    HouseholdPermissionError,
+    HouseholdConflictError,
+    get_household_member,
+    require_household_role,
+    get_target_member
+)
 
 MAX_CREATED_HOUSEHOLDS = 5
 MAX_HOUSEHOLD_MEMBERS = 20
 
-# ошибки
-class HouseholdNotFoundError(Exception):
-    pass
-
-class HouseholdPermissionError(Exception):
-    pass
-
-class HouseholdConflictError(Exception):
-    pass
-
-
-# вспомогательные функции
-def get_household_member(
-    db: Session,
-    household_id: int,
-    user_id: int,
-) -> HouseholdMember:
-
-    member = db.scalar(
-        select(HouseholdMember).where(
-            HouseholdMember.household_id == household_id,
-            HouseholdMember.user_id == user_id,
-        )
-    )
-
-    if member is None:
-        raise HouseholdNotFoundError(
-            "Household not found"
-        )
-
-    return member
-
-def require_household_role(
-    member: HouseholdMember,
-    *allowed_roles: HouseholdRole,
-) -> None:
-
-    if member.role not in allowed_roles:
-        raise HouseholdPermissionError(
-            "You do not have permission to perform this action"
-        )
-
-def get_target_member(
-    db: Session,
-    household_id: int,
-    target_user_id: int,
-) -> HouseholdMember:
-
-    member = db.scalar(
-        select(HouseholdMember).where(
-            HouseholdMember.household_id == household_id,
-            HouseholdMember.user_id == target_user_id,
-        )
-    )
-
-    if member is None:
-        raise HouseholdNotFoundError(
-            "Member not found"
-        )
-
-    return member
 
 def create_household(
     db: Session,
@@ -158,11 +105,16 @@ def get_household_members(
     user_id: int,
 ) -> list[HouseholdMember]:
 
-    get_household_member(
+    current_member = get_household_member(
         db,
         household_id,
         user_id,
     )
+
+    if current_member is None:
+        raise HouseholdNotFoundError(
+            "Household not found"
+        )
 
     stmt = (
         select(HouseholdMember)
@@ -186,6 +138,11 @@ def add_household_member(
         household_id,
         current_user_id,
     )
+    
+    if current_member is None:
+        raise HouseholdNotFoundError(
+            "Household not found"
+        )
 
     require_household_role(
         current_member,
@@ -206,11 +163,7 @@ def add_household_member(
             "Household can have a maximum of 20 members"
         )
 
-    user = db.scalar(
-        select(User).where(
-            User.username == member_data.username,
-        )
-    )
+    user = db.get(User, member_data.user_id)
 
     if user is None:
         raise HouseholdNotFoundError("User not found")

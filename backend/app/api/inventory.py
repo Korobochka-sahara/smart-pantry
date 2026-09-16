@@ -10,14 +10,17 @@ from app.schemas.inventory_item import (
 )
 from app.security import get_current_user
 from app.services.inventory_service import (
-    InventoryNotFoundError,
-    InventoryPermissionError,
-    ProductNotFoundError,
     create_inventory_item,
     delete_inventory_item,
     get_household_inventory,
     get_inventory_item,
     update_inventory_item,
+)
+from app.services.auxiliary_functions import (
+    HouseholdPermissionError,
+    InventoryNotFoundError,
+    ProductNotFoundError,
+    require_household_access,
 )
 
 
@@ -37,21 +40,10 @@ def get_inventory(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        # Проверяем, что пользователь состоит в household
-        from app.services.inventory_service import require_household_access
+        require_household_access(db, household_id, current_user.id)
+        return get_household_inventory(db, household_id)
 
-        require_household_access(
-            db,
-            household_id,
-            current_user.id,
-        )
-
-        return get_household_inventory(
-            db,
-            household_id,
-        )
-
-    except InventoryPermissionError as error:
+    except HouseholdPermissionError as error:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),
@@ -59,36 +51,30 @@ def get_inventory(
 
 
 @router.get(
-    "/{inventory_item_id}",
+    "/{product_id}",
     response_model=InventoryItemResponse,
 )
 def get_inventory_item_endpoint(
     household_id: int = Path(gt=0),
-    inventory_item_id: int = Path(gt=0),
+    product_id: int = Path(gt=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     try:
-        require_household_access(
-            db,
-            household_id,
-            current_user.id,
-        )
+        require_household_access(db, household_id, current_user.id)
 
         item = get_inventory_item(
             db,
             household_id,
-            inventory_item_id,
+            product_id,
         )
 
         if item is None:
-            raise InventoryNotFoundError(
-                "Inventory item not found"
-            )
+            raise InventoryNotFoundError("Inventory item not found")
 
         return item
 
-    except InventoryPermissionError as error:
+    except HouseholdPermissionError as error:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),
@@ -120,7 +106,7 @@ def create_inventory_item_endpoint(
             item_data,
         )
 
-    except InventoryPermissionError as error:
+    except HouseholdPermissionError as error:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),
@@ -134,13 +120,13 @@ def create_inventory_item_endpoint(
 
 
 @router.patch(
-    "/{inventory_item_id}",
+    "/{product_id}",
     response_model=InventoryItemResponse,
 )
 def update_inventory_item_endpoint(
     item_data: InventoryItemUpdate,
     household_id: int = Path(gt=0),
-    inventory_item_id: int = Path(gt=0),
+    product_id: int = Path(gt=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -149,11 +135,11 @@ def update_inventory_item_endpoint(
             db,
             household_id,
             current_user.id,
-            inventory_item_id,
+            product_id,
             item_data,
         )
 
-    except InventoryPermissionError as error:
+    except HouseholdPermissionError as error:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),
@@ -167,12 +153,12 @@ def update_inventory_item_endpoint(
 
 
 @router.delete(
-    "/{inventory_item_id}",
+    "/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_inventory_item_endpoint(
     household_id: int = Path(gt=0),
-    inventory_item_id: int = Path(gt=0),
+    product_id: int = Path(gt=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -181,10 +167,10 @@ def delete_inventory_item_endpoint(
             db,
             household_id,
             current_user.id,
-            inventory_item_id,
+            product_id,
         )
 
-    except InventoryPermissionError as error:
+    except HouseholdPermissionError as error:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),

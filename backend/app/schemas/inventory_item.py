@@ -23,7 +23,6 @@ class InventoryItemUpdate(BaseModel):
 
 
 class InventoryItemResponse(BaseModel):
-    id: int
     household_id: int
     product_id: int
     quantity: Decimal

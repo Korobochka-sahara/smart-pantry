@@ -15,22 +15,16 @@ class HouseholdResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-class HouseholdMemberUserResponse(BaseModel):
-    id: int
-    username: str
-
-    model_config = ConfigDict(from_attributes=True)
-
 
 class HouseholdMemberResponse(BaseModel):
-    user: HouseholdMemberUserResponse
+    user_id: int
     role: HouseholdRole
     joined_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 class HouseholdMemberAdd(BaseModel):
-    username: str
+    user_id: int
 
 class HouseholdRoleUpdate(BaseModel):
     role: HouseholdRole

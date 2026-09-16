@@ -8,6 +8,7 @@ from app.api.household import router as household_router
 from app.api.product import router as product_router
 from app.api.inventory import router as inventory_router
 from app.tasks.cleanup import cleanup_tokens_job
+from app.api.tracked_product import router as tracked_product_router
 
 
 scheduler = BackgroundScheduler()
@@ -41,6 +42,7 @@ app.include_router(auth_router)
 app.include_router(household_router)
 app.include_router(product_router)
 app.include_router(inventory_router)
+app.include_router(tracked_product_router)
 
 
 @app.get("/")

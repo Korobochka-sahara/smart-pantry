@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 import os
 import jwt
+from uuid import uuid4
 from jwt.exceptions import InvalidTokenError
 
 from app.db.database import get_db
@@ -44,7 +45,8 @@ def create_refresh_token(user_id: int) -> str:
     payload = {
         "sub": str(user_id),
         "exp": expire,
-        "type": "refresh"
+        "type": "refresh",
+        "jti": str(uuid4())
     }
 
     return jwt.encode(

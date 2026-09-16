@@ -4,9 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.product import Product
 from app.schemas.product import ProductCreate
 
-
-class ProductConflictError(Exception):
-    pass
+from app.services.auxiliary_functions import ProductConflictError
 
 
 def normalize_text(value: str) -> str:

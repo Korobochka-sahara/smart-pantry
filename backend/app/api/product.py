@@ -3,7 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from app.db.database import get_db
 from app.schemas.product import ProductCreate, ProductResponse
-from app.services.product_service import ProductConflictError, create_product, get_product, search_products
+from app.services.product_service import ( 
+    create_product, 
+    get_product, 
+    search_products)
+from app.services.auxiliary_functions import ProductConflictError
 
 from app.enums.category import ProductCategory
 

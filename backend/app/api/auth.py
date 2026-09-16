@@ -18,7 +18,6 @@ from app.security import (
 )
 from app.services.auth_service import (
     authenticate_user,
-    cleanup_refresh_tokens,
     register_user,
     revoke_refresh_token,
     save_refresh_token,
