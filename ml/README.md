@@ -170,3 +170,19 @@ Endpoint принимает изображение в multipart/form-data и в�
 - [ ] Тестирование парсера на разных чеках.
 - [ ] Сопоставление распознанных товаров с `Product` в PostgreSQL.
 - [ ] Интеграция подтверждения товарных позиций с основным backend.
+
+
+
+Запуск:
+cd C:\Users\korobochka_sahara\projects\smart-pantry
+.\ml\.venv\Scripts\Activate.ps1
+cd ml\ocr_service
+python -m uvicorn main:app --host 127.0.0.1 --port 8001
+
+сохранить фикстуру для теста в отдельной консоли:
+curl.exe -X POST "http://127.0.0.1:8001/ocr" `                             
+     -F "file=@ml/test_images/receipt_$номер$.jpg;type=image/jpeg" `   
+     -o "ml/tests/ocr/fixtures/receipt_$номер$_$модель$_response.json"
+
+тест в отдельной консоли:
+curl.exe -X POST "http://127.0.0.1:8001/ocr" -F "file=@ml/test_images/receipt_01.jpg;type=image/jpeg"
