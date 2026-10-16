@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
+import logging
 
 from app.api.auth import router as auth_router
 from app.api.household import router as household_router
@@ -31,6 +32,11 @@ async def lifespan(app: FastAPI):
 
     scheduler.shutdown()
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 app = FastAPI(
     title="Smart Pantry API",

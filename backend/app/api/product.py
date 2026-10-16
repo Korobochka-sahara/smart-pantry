@@ -3,10 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from app.db.database import get_db
 from app.schemas.product import ProductCreate, ProductResponse
-from app.services.product_service import ( 
-    create_product, 
-    get_product, 
-    search_products)
+from app.services.product_service import (
+    create_product,
+    get_product,
+)
+from app.services.product_matching import search_catalog_products
 from app.services.auxiliary_functions import ProductConflictError
 
 from app.enums.category import ProductCategory
@@ -26,9 +27,16 @@ def search(
         min_length=1,
         max_length=255,
     ),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    return search_products(db, q)
+    return search_catalog_products(
+        db=db,
+        query=q,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(

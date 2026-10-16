@@ -4,7 +4,7 @@ from pathlib import Path
 from ml.ocr_service.receipt_parser import parse_receipt
 
 
-FIXTURES_DIR = Path("ml/tests/ocr/fixtures")
+FIXTURES_DIR = Path("ml/tests/fixtures")
 
 
 def test_parse_one_fixture():

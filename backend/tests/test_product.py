@@ -10,9 +10,9 @@ def test_create_product(client):
             "name": "Milk",
             "brand": "Prostokvashino",
             "category": "dairy",
-            "unit": "L",
+            "unit": "l",
             "package_quantity": "1.000",
-            "package_unit": "L",
+            "package_unit": "l",
         },
     )
 
@@ -24,9 +24,9 @@ def test_create_product(client):
     assert data["name"] == "Milk"
     assert data["brand"] == "Prostokvashino"
     assert data["category"] == "dairy"
-    assert data["unit"] == "L"
+    assert data["unit"] == "l"
     assert data["package_quantity"] == "1.000"
-    assert data["package_unit"] == "L"
+    assert data["package_unit"] == "l"
 
 
 def test_create_product_without_barcode(client):
@@ -60,9 +60,9 @@ def test_create_product_duplicate_barcode(client, create_product):
             "name": "Another Milk",
             "brand": "Another Brand",
             "category": "dairy",
-            "unit": "L",
+            "unit": "l",
             "package_quantity": "1.000",
-            "package_unit": "L",
+            "package_unit": "l",
         },
     )
 
@@ -103,8 +103,8 @@ def test_search_product_by_name(client, create_product):
         name="Apple Juice",
         brand="Rich",
         category="drinks",
-        unit="L",
-        package_unit="L",
+        unit="l",
+        package_unit="l",
     )
 
     response = client.get("/products/search", params={"q": "Milk"})
@@ -154,6 +154,56 @@ def test_search_product_case_insensitive(client, create_product):
 
     assert len(data) == 1
     assert data[0]["name"] == "Milk"
+
+
+def test_search_product_by_partial_name(client, create_product):
+    create_product(
+        barcode="4601234567890",
+        name="Milk Chocolate",
+        brand="Alpen Gold",
+        category="sweets",
+        unit="kg",
+        package_quantity=0.1,
+        package_unit="kg",
+    )
+
+    response = client.get(
+        "/products/search",
+        params={"q": "Milk Choc"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["name"] == "Milk Chocolate"
+
+
+def test_search_products_pagination(client, create_product):
+    create_product(
+        barcode="4601234567890",
+        name="Milk",
+    )
+    create_product(
+        barcode="4601234567891",
+        name="Milk Chocolate",
+        category="sweets",
+        unit="kg",
+        package_quantity=0.1,
+        package_unit="kg",
+    )
+
+    response = client.get(
+        "/products/search",
+        params={
+            "q": "Milk",
+            "limit": 1,
+            "offset": 0,
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
 
 
 def test_search_products_returns_multiple_results(client, create_product):

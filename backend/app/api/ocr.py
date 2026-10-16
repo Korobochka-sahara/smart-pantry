@@ -1,9 +1,10 @@
 '''HTTP endpoint и приём изображения'''
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
 from app.schemas.ocr import OCRResponse
-from app.services.ocr import OCRService
-
+from app.services.ocr_service import OCRService
+from app.db.database import get_db
 
 router = APIRouter(
     prefix="/ocr",
@@ -24,6 +25,7 @@ ALLOWED_TYPES = {
 @router.post("/receipts", response_model=OCRResponse)
 async def recognize_receipt(
     file: UploadFile = File(...),
+    db: Session = Depends(get_db),
 ):
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(
@@ -34,10 +36,7 @@ async def recognize_receipt(
     content = await file.read(MAX_FILE_SIZE + 1)
 
     if not content:
-        raise HTTPException(
-            status_code=400,
-            detail="Файл пуст.",
-        )
+        raise HTTPException(status_code=400, detail="Файл пуст.")
 
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
@@ -50,10 +49,9 @@ async def recognize_receipt(
             filename=file.filename or "receipt.jpg",
             content=content,
             content_type=file.content_type,
+            db=db,
         )
     except Exception as exc:
-        # В production нужно логировать ошибку,
-        # не раскрывая внутренние детали клиенту.
         raise HTTPException(
             status_code=502,
             detail="OCR-сервис недоступен или завершился с ошибкой.",

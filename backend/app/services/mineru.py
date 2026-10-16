@@ -11,7 +11,12 @@ class MinerUClient:
         timeout: float = 300.0,
     ):
         self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
+        self.timeout = httpx.Timeout(
+            connect=10.0,
+            read=600.0,
+            write=60.0,
+            pool=10.0,
+        )
 
     async def recognize(
         self,

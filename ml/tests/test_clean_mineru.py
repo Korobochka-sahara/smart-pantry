@@ -7,7 +7,7 @@ from ml.ocr_service.receipt_parser import (
 )
 
 
-FIXTURES_DIR = Path("ml/tests/ocr/fixtures")
+FIXTURES_DIR = Path("ml/tests/fixtures")
 
 
 def test_clean_fixture():

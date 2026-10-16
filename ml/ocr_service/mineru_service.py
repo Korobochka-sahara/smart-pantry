@@ -1,5 +1,3 @@
-# ml/ocr_service/mineru_service.py
-
 import asyncio
 import logging
 from pathlib import Path

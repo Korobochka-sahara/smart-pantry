@@ -79,17 +79,23 @@ def clean_mineru_markdown(markdown: str) -> str:
 
 class ReceiptItem(BaseModel):
     raw_name: str = Field(
-        description="Исходная строка товара из OCR. Не исправлять и не сокращать."
+        description=(
+            "Исходная строка товара из OCR. "
+            "Не исправлять и не сокращать."
+        )
     )
 
     item_code: str | None = Field(
         default=None,
-        description="Код товара, если его можно уверенно выделить из строки."
+        description=(
+            "Код товара, если его можно уверенно выделить из строки."
+        )
     )
 
     name: str = Field(
         description=(
-            "Название товара в нижнем регистре. Без бренда, кода и веса. Аббревиатуры не расшифровывать."
+            "Название товара в нижнем регистре. "
+            "Без бренда, кода и веса. Аббревиатуры не расшифровывать."
         )
     )
 
@@ -101,49 +107,37 @@ class ReceiptItem(BaseModel):
             )
     )
 
-    brand_status: Literal["explicit", "inferred", "unknown"] = Field(
-        description=(
-            "explicit — бренд явно указан; "
-            "inferred — предполагается по строке; "
-            "unknown — определить не удалось."
-        )
-    )
-
     quantity: float = Field(
         gt=0,
         description=(
-        "Количество покупки. Для фасованных товаров используй количество "
-        "штук; для весовых товаров — фактическую массу. "
-        "Не используй kg или g для количества пачек."
-        ),
+            "Количество покупки. Для фасованных товаров используй количество "
+            "штук; для весовых товаров — фактическую массу. "
+            "Не используй kg или g для количества пачек."
+        )
     )
 
     unit: Unit = Field(
         description=(
-        "Единица quantity: pcs — штуки, "
-        "g — граммы, kg — килограммы, ml — миллилитры, l — литры."
+            "Единица quantity: pcs — штуки, "
+            "g — граммы, kg — килограммы, ml — миллилитры, l — литры."
         )
     )
 
     package_quantity: float | None = Field(
         default=None,
         gt=0,
-        description="Масса или объём ОДНОЙ упаковки. Например, для одной пачки "
-        "чипсов массой 120 г укажи 120. Не копируй сюда количество "
-        "купленных упаковок."
+        description=(
+            "Масса или объём ОДНОЙ упаковки. Например, для одной пачки "
+            "чипсов массой 120 г укажи 120. Не копируй сюда количество "
+            "купленных упаковок."
+        )
     )
 
     package_unit: PackageUnit | None = Field(
         default=None,
-        description="Единица package_quantity: g, kg, ml или l. "
-        "Если package_quantity отсутствует, package_unit должен быть null."
-    )
-
-    quantity_source: Literal["explicit", "inferred", "defaulted"] = Field(
         description=(
-            "explicit — количество явно указано; "
-            "inferred — восстановлено по контексту; "
-            "defaulted — принято значение по умолчанию."
+            "Единица package_quantity: g, kg, ml или l. "
+            "Если package_quantity отсутствует, package_unit должен быть null."
         )
     )
 
@@ -179,10 +173,8 @@ SYSTEM_PROMPT = """
   "item_code": "7602BON",
   "name": "c.чип.кар.вк.лис.по-мил.",
   "brand": BON,
-  "brand_status": "explicit",
   "quantity": 1.0, "unit": "pcs",
-  "package_quantity": 80.0, "package_unit": "g",
-  "quantity_source": "explicit"
+  "package_quantity": 80.0, "package_unit": "g"
 }
 
 Вход: "П.КАФЕ СЭНДВ.КУР/СОУС.ПЕС.160Г"
@@ -192,10 +184,8 @@ SYSTEM_PROMPT = """
   "item_code": null,
   "name": "сэндв.кур/соус.пес.",
   "brand": "П.КАФЕ",
-  "brand_status": "explicit",
   "quantity": 1.0, "unit": "pcs",
-  "package_quantity": 160.0, "package_unit": "g",
-  "quantity_source": "explicit"
+  "package_quantity": 160.0, "package_unit": "g""
 }
 
 Вход: "П.КАФЕ НАПИТОК ЛАТТЕ МОЛ.ЗЗОМЛ"
@@ -205,10 +195,8 @@ SYSTEM_PROMPT = """
   "item_code": null,
   "name": "напиток латте мол.",
   "brand": "П.КАФЕ",
-  "brand_status": "explicit",
   "quantity": 1.0, "unit": "pcs",
-  "package_quantity": 330.0, "package_unit": "ml",
-  "quantity_source": "explicit"
+  "package_quantity": 330.0, "package_unit": "ml"
 }
 
 Вход: "FISH HOUSE CALAT ЧУКА 180Г"
@@ -218,10 +206,8 @@ SYSTEM_PROMPT = """
   "item_code": null,
   "name": "салат чука",
   "brand": "FISH HOUSE",
-  "brand_status": "explicit",
   "quantity": 1.0, "unit": "pcs",
-  "package_quantity": 180.0, "package_unit": "g",
-  "quantity_source": "explicit"
+  "package_quantity": 180.0, "package_unit": "g"
 }
 
 Вход: "5871 S.M.BODA GA3.0,5Л"
@@ -231,10 +217,8 @@ SYSTEM_PROMPT = """
   "item_code": "5871",
   "name": "вода газ.",
   "brand": "S.M.",
-  "brand_status": "explicit",
   "quantity": 1.0, "unit": "pcs",
-  "package_quantity": 0.5, "package_unit": "l",
-  "quantity_source": "explicit"
+  "package_quantity": 0.5, "package_unit": "l"
 }
 
 Верни ТОЛЬКО валидный JSON, соответствующий схеме. Не добавляй никаких пояснений.
@@ -281,9 +265,6 @@ def parse_receipt(
 
     if not cleaned_text:
         raise ValueError("После очистки OCR-текст пуст")
-    
-    print(f"Исходный размер: {len(markdown):,} символов")
-    print(f"После очистки: {len(cleaned_text):,} символов")
 
     json_schema = ReceiptResult.model_json_schema()
 

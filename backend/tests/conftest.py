@@ -63,8 +63,6 @@ from app.models.household import Household
 from app.models.household_member import HouseholdMember
 from app.models.product import Product
 from app.models.inventory_item import InventoryItem
-from app.models.receipt import Receipt
-from app.models.receipt_item import ReceiptItem
 from app.models.refresh_token import RefreshToken
 from app.models.tracked_product import TrackedProduct
 
@@ -196,9 +194,9 @@ def create_product(client):
         name="Milk",
         brand="Prostokvashino",
         category="dairy",
-        unit="L",
+        unit="l",
         package_quantity=1,
-        package_unit="L",
+        package_unit="l",
     ):
         response = client.post(
             "/products",
