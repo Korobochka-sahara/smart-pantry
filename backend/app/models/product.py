@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
 from app.enums.category import ProductCategory
+from app.enums.unit import Unit
 
 
 class Product(Base):
@@ -50,8 +51,8 @@ class Product(Base):
     #   pcs — упаковки/единицы товара
     #   kg  — килограммы для развесных товаров
     #   L   — литры для товаров, которые считаются по объёму
-    unit: Mapped[str] = mapped_column(
-        String(50),
+    unit: Mapped[Unit] = mapped_column(
+        Enum(Unit, name = "unit"),
         nullable=False,
     )
 
@@ -68,8 +69,8 @@ class Product(Base):
 
     # Единица измерения содержимого упаковки.
     # Например: L, ml, kg, g.
-    package_unit: Mapped[str | None] = mapped_column(
-        String(50),
+    package_unit: Mapped[Unit | None] = mapped_column(
+        Enum(Unit, name = "unit"),
         nullable=True,
     )
 
