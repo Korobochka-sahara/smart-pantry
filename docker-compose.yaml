@@ -3,17 +3,61 @@ services:
     image: postgres:16
     container_name: smart-pantry-postgres
     restart: unless-stopped
-
     environment:
-      POSTGRES_DB: smart_pantry
-      POSTGRES_USER: smart_pantry
-      POSTGRES_PASSWORD: smart_pantry_password
-
+      POSTGRES_DB: ${POSTGRES_DB:-smart_pantry}
+      POSTGRES_USER: ${POSTGRES_USER:-smart_pantry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smart_pantry_password}
     ports:
       - "5433:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smart_pantry} -d ${POSTGRES_DB:-smart_pantry}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ml:
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+    container_name: smart-pantry-ml
+    restart: unless-stopped
+    environment:
+      MINERU_TIER: ${MINERU_TIER:-standard}
+    ports:
+      - "8001:8001"
+    volumes:
+      - mineru_cache:/root/.cache
+      - mineru_config:/root/.config
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5).read()"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: smart-pantry-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-smart_pantry}:${POSTGRES_PASSWORD:-smart_pantry_password}@postgres:5432/${POSTGRES_DB:-smart_pantry}
+      SECRET_KEY: ${SECRET_KEY:-replace-this-local-development-secret-key-32-bytes-minimum}
+      MINERU_BASE_URL: http://ml:8001
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ml:
+        condition: service_healthy
+    command: ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
 
 volumes:
   postgres_data:
+  mineru_cache:
+  mineru_config:

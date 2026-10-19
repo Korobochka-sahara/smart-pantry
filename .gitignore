@@ -1,5 +1,22 @@
+# Secrets / local configuration
 .env
+**/.env
+**/.env.*
+!**/.env.example
+!backend/.env.test
+
+# Python environments and generated files
+**/.venv/
+**/venv/
 __pycache__/
+**/__pycache__/
+*.py[cod]
 .pytest_cache/
-blobs
-*.venv/
+**/.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ML caches / downloaded models / experiment outputs not intentionally tracked
+blobs/
+.cache/
+**/.cache/

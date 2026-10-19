@@ -1,3 +1,41 @@
+# Backend tests
+
+Тесты используют `pytest`, `FastAPI TestClient` и отдельную PostgreSQL-базу, URL которой задаётся в `backend/.env.test`. В `conftest.py` создаются таблицы на время сессии, очищаются перед каждым тестом и подменяется dependency `get_db`.
+
+## Подготовка
+
+Установи зависимости из `backend/requirements.txt`, запусти PostgreSQL и один раз создай тестовую БД, если её ещё нет:
+
+```powershell
+docker exec -it smart-pantry-postgres psql -U smart_pantry -d smart_pantry -c "CREATE DATABASE smart_pantry_test;"
+```
+
+Проверь, что `DATABASE_URL` в `.env.test` указывает именно на `smart_pantry_test`. Никогда не запускай тесты против рабочей базы: фикстура очищает таблицы.
+
+## Запуск
+
+Из каталога `backend/` с активным `.venv`:
+
+```powershell
+python -m pytest tests -v
+python -m pytest tests/test_auth.py -v
+python -m pytest tests/test_inventory.py -v
+python -m pytest tests/test_ocr.py -v
+```
+
+## Состав
+
+- `test_auth.py` — регистрация, вход, JWT, refresh и logout.
+- `test_household.py` — домохозяйства, роли и ограничения доступа.
+- `test_product.py` — каталог и поиск товаров.
+- `test_inventory.py` — создание, обновление, удаление запасов и изоляция домохозяйств.
+- `test_tracked_product.py` — минимальные остатки и low-stock.
+- `test_product_matching.py` — сопоставление позиций чека с каталогом.
+- `test_ocr.py` — контракт OCR endpoint и ошибки загрузки.
+- `conftest.py` — тестовая БД, TestClient и повторно используемые фикстуры.
+
+Если тестовый файл отсутствует в текущей ветке, пропусти команду для него.
+
 # 1. Auth — 9 тестов
 1. test_register_user — успешная регистрация пользователя.
 2. test_register_duplicate_email — нельзя зарегистрировать второго пользователя с тем же email.

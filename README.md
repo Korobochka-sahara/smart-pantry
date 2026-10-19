@@ -1,1403 +1,285 @@
-# Smart Pantry — полное описание проекта
+# Smart Pantry
+
+Smart Pantry — клиент-серверный проект для учёта продуктов дома. Backend хранит каталог товаров и запасы домохозяйств, управляет пользователями и правами доступа. ML/OCR-сервис распознаёт фотографии чеков; после распознавания пользователь должен проверить позиции и подтвердить, какие товары добавлять в инвентарь.
+
+> **Текущий статус:** backend и API управления данными реализованы; OCR-процесс интегрирован через отдельный HTTP-сервис MinerU и парсер Qwen/Ollama. Android-клиент находится в планах и в этом репозитории пока отсутствует. OCR не должен автоматически менять `InventoryItem`: добавление происходит отдельным подтверждённым запросом.
+
+## Возможности
+
+- Регистрация, вход, access/refresh JWT, ротация и отзыв refresh-токенов.
+- Домохозяйства (`household`) и роли `OWNER`, `ADMIN`, `MEMBER`.
+- Каталог продуктов (`Product`) и домашние запасы (`InventoryItem`).
+- Отслеживание товаров и поиск позиций с низким остатком (`TrackedProduct`).
+- OCR чеков: загрузка изображения → MinerU → парсер Qwen через Ollama → поиск кандидатов в каталоге.
+- Миграции схемы БД через Alembic и API-тесты через pytest.
+- Эксперименты сравнения MinerU, EasyOCR и PaddleOCR.
+
+## Архитектура
+
+```text
+Клиент (пока Swagger / будущий Android)
+                 |
+                 v
+       Backend — FastAPI :8000
+       |       |        |
+       |       |        +-- Ollama API / Qwen (отдельный процесс)
+       |       +----------- PostgreSQL :5432
+       +------------------- ML OCR service :8001
+                                  |
+                                  +-- MinerU
+```
+
+В Docker Compose поднимаются **три контейнера**: `backend`, `ml` и `postgres`. Два контейнера приложения — backend и ML; PostgreSQL — отдельная инфраструктурная БД. Ollama/Qwen — отдельный runtime: в текущей конфигурации он должен быть доступен backend по адресу `OLLAMA_HOST` (по умолчанию клиент Ollama использует `http://localhost:11434`). Если backend работает в Docker Desktop, укажи `OLLAMA_HOST=http://host.docker.internal:11434`, когда Ollama запущен на Windows-хосте. Модель должна быть скачана в Ollama, например `ollama pull qwen2.5:7b-instruct`.
+
+### Поток OCR
+
+1. Клиент отправляет изображение в `POST /ocr/receipts` backend API.
+2. Backend отправляет файл в ML-сервис `POST /ocr`.
+3. ML-сервис вызывает MinerU и возвращает Markdown.
+4. Backend вызывает `parse_receipt()` (Qwen/Ollama), получает структурированные позиции.
+5. Backend сопоставляет позиции с `Product` и возвращает кандидатов.
+6. Клиент показывает результат пользователю. Только после подтверждения отдельный запрос добавляет выбранные `product_id` и количество через Inventory API.
+
+## Структура репозитория
+
+```text
+smart-pantry/
+├── README.md                     # Главная документация: архитектура, запуск, тесты, Docker
+├── docker-compose.yaml            # PostgreSQL + backend + ML OCR service
+├── .gitignore                     # Исключения Git
+├── backend/
+│   ├── Dockerfile                 # Образ FastAPI backend
+│   ├── requirements.txt           # Зависимости backend и его тестов
+│   ├── .env.example               # Шаблон настроек локального backend
+│   ├── .env.test                  # Настройки тестовой БД (не хранить реальные секреты)
+│   ├── alembic.ini                # Настройки миграций
+│   ├── alembic/
+│   │   ├── env.py                 # Подключение Alembic к SQLAlchemy metadata / DATABASE_URL
+│   │   └── versions/              # История миграций схемы БД
+│   ├── app/
+│   │   ├── main.py                # Создание FastAPI, подключение роутеров и scheduler
+│   │   ├── security.py            # JWT и проверка текущего пользователя
+│   │   ├── api/                   # HTTP endpoints и преобразование ошибок в HTTP-коды
+│   │   ├── db/                    # SQLAlchemy engine, SessionLocal, Base, get_db
+│   │   ├── enums/                 # Перечисления ролей, категорий и единиц измерения
+│   │   ├── models/                # ORM-модели таблиц
+│   │   ├── schemas/               # Pydantic-схемы запросов и ответов
+│   │   ├── services/              # Бизнес-логика, работа с данными, OCR orchestration
+│   │   └── tasks/                 # Периодические фоновые задачи
+│   └── tests/                     # API-тесты backend и fixtures
+└── ml/
+    ├── Dockerfile                 # Образ OCR-сервиса
+    ├── requirements.txt           # Зависимости MinerU и OCR-экспериментов
+    ├── __init__.py                # Python-пакет ml (нужен для импорта парсера backend)
+    ├── ocr_service/               # HTTP-сервис распознавания
+    │   ├── main.py                # FastAPI endpoint /ocr и /health
+    │   ├── mineru_service.py      # Обёртка MinerU, синхронная обработка в отдельном потоке
+    │   └── receipt_parser.py      # Парсер Markdown чека через Qwen/Ollama
+    ├── ocr/                       # Экспериментальные скрипты EasyOCR и PaddleOCR
+    ├── test_images/                # Изображения чеков для ручных экспериментов
+    ├── results/                    # Сохранённые результаты OCR в JSON, по движкам
+    └── tests/
+        ├── fixtures/               # JSON-фикстуры с результатами OCR
+        ├── test_clean_mineru.py    # Проверка очистки результата MinerU
+        └── test_receipt_parser_llm.py # Проверка структурирования через Qwen
+```
+
+README в соответствующих каталогах дополняют это дерево и описывают конкретные файлы.
+
+## Требования
+
+- Python 3.11 рекомендуется для локальной разработки.
+- Docker Desktop + Docker Compose v2 — для контейнерного запуска.
+- Ollama с моделью `qwen2.5:7b-instruct` — для LLM-парсинга чеков.
+- MinerU может скачать модели при первом запуске; подготовь свободное место на диске и дождись загрузки.
+- Для ручных экспериментов EasyOCR/PaddleOCR нужны дополнительные модели и ресурсы. GPU не обязателен для CPU-режима, но распознавание будет медленнее.
+
+В проекте оставлены **ровно два канонических файла зависимостей**: `backend/requirements.txt` и `ml/requirements.txt`. Старый корневой `requirements.txt`, который смешивал зависимости обеих сред и был сохранён в UTF-16, удалён.
+
+## Быстрый запуск через Docker
+
+Из корня репозитория:
 
-## 1. Назначение проекта
+```powershell
+# 1. (Рекомендуется) создавать корневой .env для Compose-переменных,
+#    например SECRET_KEY и OLLAMA_HOST. Не коммитеть этот файл.
+# 2. Запустить сборку и три сервиса
+docker compose up --build
+```
 
-Smart Pantry — pet project для управления домашними запасами продуктов.
+После старта:
 
-Основная идея приложения:
+- Backend Swagger: http://localhost:8000/docs
+- Backend root: http://localhost:8000/
+- ML health: http://localhost:8001/health
+- PostgreSQL на хосте: `localhost:5433`, внутри Compose-сети: `postgres:5432`.
 
-пользователь создаёт одно или несколько домохозяйств (households), добавляет туда участников и совместно с ними ведёт учёт продуктов.
+Compose выполняет `alembic upgrade head` перед запуском backend. Первый build ML-образа и первая загрузка моделей могут занимать много времени. Для просмотра логов:
 
-Приложение должно позволять:
+```powershell
+docker compose logs -f backend
+docker compose logs -f ml
+docker compose logs -f postgres
+```
 
-* создавать household;
-* приглашать/добавлять пользователей;
-* назначать роли;
-* хранить продукты;
-* учитывать количество продуктов;
-* отслеживать сроки годности;
-* отслеживать открытые продукты;
-* вести историю изменений количества;
-* отслеживать продукты, которые заканчиваются;
-* сканировать чеки;
-* распознавать товары с помощью OCR;
-* сопоставлять распознанные товары с существующими продуктами;
-* отправлять уведомления;
-* в будущем поддерживать Android-приложение как основной клиент.
+Остановить контейнеры, сохранив данные БД:
 
-Проект одновременно является практическим pet project и способом продемонстрировать навыки backend-разработки, работы с БД, API, authentication, ORM, миграциями, ML/OCR и Android.
+```powershell
+docker compose down
+```
 
----
+Удалить также данные БД и кеши моделей (необратимо):
 
-# 2. Технологический стек
+```powershell
+docker compose down -v
+```
 
-## Backend
+### Ollama / Qwen
 
-Язык:
+Compose не запускает Ollama отдельным контейнером. Установить/запустить Ollama на хосте, скачать модель и передать адрес backend-контейнеру:
 
-Python
+```powershell
+ollama pull qwen2.5:7b-instruct
+```
 
-Framework:
+В `docker-compose.yaml` для backend по умолчанию используется `OLLAMA_HOST=http://host.docker.internal:11434`. Убедитесь, что Ollama принимает запросы от Docker Desktop. Если Ollama ещё не настроен, API-эндпоинты без OCR продолжат работать, но запросы OCR не завершат этап парсинга.
 
-FastAPI
+## Локальный запуск без Docker для Python-сервисов
 
-ORM:
+### 1. PostgreSQL
 
-SQLAlchemy 2.x
+Можно использовать Compose только для базы:
 
-Миграции:
+```powershell
+docker compose up -d postgres
+```
 
-Alembic
+### 2. Backend
 
-База данных:
+```powershell
+cd backend
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
 
-PostgreSQL 16
+Проверьте `backend/.env`: `DATABASE_URL` должен указывать на PostgreSQL хоста, например `postgresql://smart_pantry:smart_pantry_password@localhost:5433/smart_pantry`, а `SECRET_KEY` нужно заменить на случайную строку не короче 32 байт.
 
-Authentication:
+Запуск миграций и сервера:
 
-JWT
+```powershell
+alembic upgrade head
+python -m uvicorn app.main:app --reload
+```
 
-Пароли:
+### 3. ML OCR-сервис
 
-Argon2 через pwdlib
+В отдельном PowerShell-окне из корня репозитория:
 
-Переменные окружения:
+```powershell
+cd ml
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+$env:MINERU_TIER = "standard"
+cd ocr_service
+python -m uvicorn main:app --host 127.0.0.1 --port 8001 --reload
+```
 
-python-dotenv
+Локальный backend по умолчанию обращается к `http://127.0.0.1:8001`. Если меняете адрес ML-сервиса, установиье `MINERU_BASE_URL` в окружении backend.
 
-HTTP API:
+### 4. Проверка OCR
 
-REST
+Откройте http://localhost:8000/docs и вызовите `POST /ocr/receipts`, передав JPG/PNG/WebP не более 10 MiB. Для прямой проверки ML-сервиса:
 
----
+```powershell
+curl.exe http://127.0.0.1:8001/health
+curl.exe -X POST "http://127.0.0.1:8001/ocr" -F "file=@ml/test_images/receipt_01.jpg;type=image/jpeg"
+```
 
-# 3. Frontend
+Ожидайте длительную обработку: MinerU может обрабатывать даже одностраничный чек несколько минут. В backend настроен отдельный таймаут чтения до 600 секунд.
 
-Планируется Android-приложение.
+## Тесты
 
-Основной стек:
+### Backend API-тесты
 
-* Kotlin
-* Jetpack Compose
+Тесты используют отдельную БД, указанную в `backend/.env.test`. Перед первым запуском создайте БД `smart_pantry_test`:
 
-Android-приложение будет обращаться к FastAPI backend через HTTP API.
+```powershell
+docker exec -it smart-pantry-postgres psql -U smart_pantry -d smart_pantry -c "CREATE DATABASE smart_pantry_test;"
+```
 
-Frontend не должен содержать бизнес-логику, которая должна выполняться на сервере.
+Если база уже существует, команду повторять не нужно. Затем:
 
-Например, правила:
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m pytest tests -v
+```
 
-* максимум 5 созданных households;
-* максимум 20 участников;
-* кто может менять роли;
-* кто становится новым OWNER;
+Тесты удаляют и создают таблицы в тестовой БД. **Не указывайте в `.env.test` URL рабочей БД.**
 
-должны проверяться backend.
+### ML / парсер
 
-Android-клиент должен только отображать результат API и отправлять запросы.
+Из корня репозитория в ML-окружении:
 
----
+```powershell
+python -m pytest ml/tests -v
+```
 
-# 4. Инфраструктура разработки
+Эти тесты используют сохранённые JSON-фикстуры и вызывают парсер Qwen, поэтому для LLM-теста Ollama должна работать и иметь модель `qwen2.5:7b-instruct`. Для запуска отдельных сценариев:
 
-PostgreSQL запускается в Docker.
+```powershell
+python -m ml.tests.test_clean_mineru
+python -m ml.tests.test_receipt_parser_llm
+```
 
-Контейнер базы данных:
+Подробности — в `backend/tests/README.md` и `ml/tests/README.md`.
 
-smart-pantry-postgres
+## Эксперименты OCR
 
-PostgreSQL внутри контейнера использует стандартный порт 5432.
+Запускать из корня репозитория в активном ML-окружении:
 
-На Windows локальный PostgreSQL уже занимает 5432, поэтому Docker PostgreSQL опубликован на:
+```powershell
+python ml/ocr/easyocr_test.py
+python ml/ocr/paddleocr_test.py
+```
 
-5433
+Скрипты читают `ml/test_images/receipt_01.jpg` и записывают JSON в `ml/results/easyocr/` или `ml/results/paddleocr/`. Для MinerU CLI и сравнения `standard`, `basic`, `flash` см. `ml/ocr/README.md`. Результаты не следует считать автоматическим benchmark: для сравнения фиксируйте одинаковые входные изображения, режимы, время и критерии качества.
 
-Таким образом:
+## Миграции базы данных
 
-Windows host
-↓
-localhost:5433
-↓
-Docker
-↓
-PostgreSQL:5432
+Из каталога `backend/`:
 
----
+```powershell
+alembic current
+alembic history
+alembic upgrade head
+```
 
-# 5. Переменные окружения
+Создание миграции после изменения ORM-моделей:
 
-Backend использует `.env`.
+```powershell
+alembic revision --autogenerate -m "describe schema change"
+```
 
-Пример:
+Всегда проверяйте сгенерированную миграцию перед применением. Не редактируйте старые миграции, уже применённые в других окружениях; добавляйте новую.
 
-DATABASE_URL=postgresql://smart_pantry:smart_pantry_password@localhost:5433/smart_pantry
-SECRET_KEY=<secret>
+## Конфигурация и безопасность
 
-`.env` нельзя коммитить в Git.
+- Не коммитеть реальные `.env`, ключи, токены, дампы БД или приватные чеки.
+- `backend/.env.example` — шаблон, а `backend/.env.test` предназначен только для локальных тестов.
+- Пароль PostgreSQL в Compose по умолчанию учебный. Для постоянного окружения передавайте свои переменные и не публикуйте порт БД наружу без необходимости.
+- Не выводите полный Markdown чеков и содержимое пользовательских изображений в production-логи: там могут быть личные данные.
+- OCR не является безошибочным. Пользователь должен подтвердить распознанные позиции перед записью в `InventoryItem`.
 
-В репозитории есть `.env.example` с шаблоном переменных без настоящих секретов.
+## Текущие ограничения / известные нюансы
 
-SECRET_KEY в будущем необходимо заменить на новый, если старый секрет когда-либо публиковался в истории проекта или сообщениях.
-
----
-
-# 6. Структура backend
-
-Текущая структура:
-
-backend/
-├── app/
-│   ├── api/
-│   │   ├── **init**.py
-│   │   ├── auth.py
-│   │   └── household.py
-│   │   └── product.py
-│   │
-│   ├── db/
-│   │   └── database.py
-│   │
-│   ├── enums/
-│   │   ├── **init**.py
-│   │   └── household.py
-│   │   └── cstegory.py
-│   │
-│   ├── models/
-│   │   ├── category.py, household_member.py, household.py, inventory_event.py, inventory_item.py, product.py,              |   |         receipt_item.py, receipt.py, refresh_token.py, tracked_product.py, user.py
-│   │
-│   ├── schemas/
-│   │   ├── auth.py
-│   │   └── household.py
-│   │   └── product.py
-│   │
-│   ├── services/
-│   │   ├── auth_service.py
-│   │   └── household_service.py
-│   │   └── poduct_service.py
-│   │
-│   ├── security.py
-│   └── main.py
-│
-├── alembic/
-│   ├── env.py
-│   └── versions/
-│
-└── .env
-
-Архитектурная идея:
-
-api
-↓
-services
-↓
-models / database
-
-API отвечает за HTTP.
-
-Services отвечают за бизнес-логику.
-
-Models описывают структуру БД.
-
-Schemas описывают входные и выходные данные API.
-
----
-
-# 7. Database layer
-
-`app/db/database.py` отвечает за:
-
-* загрузку DATABASE_URL;
-* создание SQLAlchemy engine;
-* создание SessionLocal;
-* определение Base;
-* dependency `get_db`.
-
-DATABASE_URL преобразуется из:
-
-postgresql://
-
-в:
-
-postgresql+psycopg://
-
-чтобы SQLAlchemy использовал psycopg.
-
-Основной паттерн:
-
-def get_db():
-db = SessionLocal()
-try:
-yield db
-finally:
-db.close()
-
-FastAPI endpoint получает Session через:
-
-db: Session = Depends(get_db)
-
----
-
-# 8. Database schema
-
-Основные таблицы:
-
-* user
-* household
-* household_member
-* product
-* inventory_item
-* receipt
-* receipt_item
-* tracked_product
-* inventory_event
-* refresh_token
-
----
-
-# 9. User
-
-Таблица `user` хранит пользователей.
-
-Основные поля:
-
-* id
-* email
-* username
-* password_hash
-* created_at
-
-Email уникальный.
-
-Username уникальный.
-
-Пароль никогда не хранится в открытом виде.
-
-Хранится Argon2 hash.
-
----
-
-# 10. Household
-
-Household — отдельное домохозяйство/пространство для совместного учёта продуктов.
-
-Поля:
-
-* id
-* name
-* created_at
-* updated_at
-
-У Household намеренно нет `owner_id`.
-
-Владелец определяется через таблицу:
-
-household_member
-
-и роль:
-
-OWNER
-
-Это позволяет хранить ownership как часть membership-модели.
-
----
-
-# 11. HouseholdMember
-
-Таблица связывает пользователей и households.
-
-Поля:
-
-* id
-* household_id
-* user_id
-* role
-* joined_at
-
-Есть unique constraint:
-
-(household_id, user_id)
-
-Один пользователь не может дважды состоять в одном household.
-
-Также используется PostgreSQL ENUM:
-
-household_role
-
-со значениями:
-
-OWNER
-ADMIN
-MEMBER
-
----
-
-# 12. Правила Household
-
-Один пользователь может создать максимум:
-
-5 households.
-
-При этом пользователь может состоять максимум в:
-
-100 households.
-
-Эти ограничения являются бизнес-правилами backend.
-
-Количество созданных households определяется по membership с ролью OWNER.
-
-Отдельный счётчик не хранится.
-
----
-
-# 13. Роли
-
-## OWNER
-
-Полный контроль над household.
-
-OWNER может:
-
-* добавлять пользователей;
-* менять роли;
-* удалять пользователей;
-* передавать ownership через предусмотренную логику;
-* покидать household.
-
-Если OWNER покидает household:
-
-1. выбирается ADMIN с минимальным username в алфавитном порядке;
-2. если ADMIN нет — выбирается MEMBER с минимальным username;
-3. выбранный пользователь становится OWNER;
-4. старый OWNER покидает household.
-
-Если других участников нет:
-
-* удаляется membership;
-* удаляется household.
-
----
-
-## ADMIN
-
-ADMIN может:
-
-* добавлять пользователей;
-* менять роли MEMBER;
-* удалять MEMBER.
-
-ADMIN не может:
-
-* изменить OWNER;
-* удалить OWNER;
-* изменить другого ADMIN;
-* удалить другого ADMIN;
-* назначить OWNER.
-
----
-
-## MEMBER
-
-MEMBER может пользоваться household, но не может управлять участниками.
-
----
-
-# 14. Household service
-
-`household_service.py` содержит бизнес-логику household.
-
-Используются доменные исключения:
-
-HouseholdNotFoundError
-
-HouseholdPermissionError
-
-HouseholdConflictError
-
-Они преобразуются API-слоем в:
-
-404
-403
-409
-
-соответственно.
-
----
-
-# 15. Household service helpers
-
-Для уменьшения дублирования используются helpers.
-
-`get_household_member(...)`
-
-Находит membership текущего пользователя.
-
-Если пользователь не является участником:
-
-HouseholdNotFoundError.
-
-`get_target_member(...)`
-
-Находит membership целевого пользователя.
-
-Если пользователь не является участником:
-
-HouseholdNotFoundError.
-
-`require_household_role(...)`
-
-Проверяет, что роль пользователя входит в список разрешённых ролей.
-
-Например:
-
-require_household_role(
-member,
-HouseholdRole.OWNER,
-HouseholdRole.ADMIN,
-)
-
-означает:
-
-действие доступно OWNER и ADMIN.
-
----
-
-# 16. Household API
-
-Prefix:
-
-/households
-
-Основные endpoint:
-
-POST /households
-
-Создание household.
-
-GET /households
-
-Получение households текущего пользователя.
-
-GET /households/{household_id}
-
-Получение household, если текущий пользователь является его участником.
-
-GET /households/{household_id}/members
-
-Получение списка участников.
-
-POST /households/{household_id}/members
-
-Добавление пользователя.
-
-PATCH /households/{household_id}/members/{target_user_id}/role
-
-Изменение роли.
-
-DELETE /households/{household_id}/members/{target_user_id}
-
-Удаление пользователя.
-
-POST /households/{household_id}/leave
-
-Выход текущего пользователя.
-
----
-
-# 17. Authentication
-
-Authentication реализован через JWT.
-
-Используются два типа токенов:
-
-access token
-
-refresh token
-
----
-
-# 18. Access token
-
-Access token используется для доступа к защищённым API.
-
-Содержит:
-
-sub = user id
-
-exp = expiration
-
-Алгоритм:
-
-HS256
-
-Текущий срок жизни:
-
-60 минут.
-
-Клиент отправляет:
-
-Authorization: Bearer <access_token>
-
-FastAPI dependency:
-
-get_current_user
-
-извлекает токен, декодирует JWT и получает пользователя из БД.
-
----
-
-# 19. Refresh token
-
-Refresh token нужен, чтобы пользователь не логинился заново после истечения access token.
-
-Срок жизни:
-
-30 дней.
-
-Refresh token также хранится в БД, но не в открытом виде.
-
-В БД хранится SHA-256 hash токена.
-
-Таблица:
-
-refresh_token
-
-Поля:
-
-* id
-* user_id
-* token_hash
-* expires_at
-* created_at
-* revoked_at
-
----
-
-# 20. Refresh token rotation
-
-При `/auth/refresh`:
-
-1. проверяется JWT;
-2. проверяется type = refresh;
-3. извлекается user_id;
-4. вычисляется hash токена;
-5. ищется соответствующая запись в БД;
-6. проверяется expiration;
-7. проверяется revoked_at;
-8. старый refresh token revoke;
-9. создаётся новый access token;
-10. создаётся новый refresh token;
-11. новый refresh token сохраняется в БД.
-
-Таким образом используется rotation.
-
----
-
-# 21. Logout
-
-POST:
-
-/auth/logout
-
-Logout revoke-ит refresh token.
-
-Access token не удаляется сервером.
-
-Он продолжает работать до expiration.
-
-Это нормальная модель для текущей реализации.
-
-Android-клиент после logout должен удалить локально сохранённые токены.
-
----
-
-# 22. Authentication endpoints
-
-POST /auth/register
-
-Регистрация.
-
-POST /auth/login
-
-Login.
-
-POST /auth/refresh
-
-Обновление токенов.
-
-POST /auth/logout
-
-Logout.
-
-GET /auth/me
-
-Получение текущего пользователя.
-
----
-
-# 23. Password validation
-
-Пароль должен:
-
-* содержать минимум 8 символов;
-* содержать uppercase;
-* содержать lowercase;
-* содержать digit.
-
-Пароль хэшируется через Argon2.
-
----
-
-# 24. Product
-
-`product` представляет сам продукт как сущность.
-
-Это не конкретная пачка продукта в доме.
-
-Например:
-
-Product:
-
-"Milk 3.2%"
-
-может существовать один раз.
-
-А конкретные запасы молока пользователя будут представлены через:
-
-InventoryItem.
-
-Поля Product:
-
-* id
-* barcode
-* name
-* brand
-* category
-* unit
-* package_quantity
-* package_unit
-* created_at
-* updated_at
-
-Barcode индексируется и может быть NULL.
-
----
-
-# 25. Category enum
-
-Category предназначена для классификации продуктов.
-
-Например:
-
-* Dairy
-* Meat
-* Vegetables
-* Fruits
-* Drinks
-* Snacks
-* Frozen
-* Canned
-* Other
-
-Точная система категорий ещё может быть доработана.
-
----
-
-# 26. InventoryItem
-
-InventoryItem — конкретный запас продукта в household.
-
-Например:
-
-Product:
-Milk
-
-InventoryItem:
-
-household = Maria's household
-quantity = 2
-unit = package
-expiry_date = ...
-
-Таким образом:
-
-Product отвечает на вопрос:
-
-"Что это за продукт?"
-
-InventoryItem:
-
-"Сколько этого продукта сейчас есть в конкретном household?"
-
----
-
-# 27. InventoryItem fields
-
-Основные поля:
-
-* id
-* household_id
-* product_id
-* quantity
-* unit
-* purchase_date
-* expiry_date
-* opened_at
-* status
-* created_at
-* updated_at
-
-Количество использует Numeric.
-
-Это важно, потому что продукты могут измеряться не только целыми штуками.
-
-Например:
-
-0.5 kg
-
-1.25 L
-
-2 units
-
----
-
-# 28. Inventory status
-
-InventoryItem должен поддерживать состояния продукта.
-
-Например:
-
-ACTIVE
-OPENED
-EXPIRED
-DEPLETED
-
-Точная enum-модель может быть уточнена при реализации inventory.
-
-Важно отделять:
-
-'количество' от 'статуса'.
-
-Например продукт может иметь quantity = 1, но быть OPENED.
-
----
-
-# 29. Inventory events
-
-Таблица:
-
-inventory_event
-
-предназначена для истории изменения запасов.
-
-Поля:
-
-* inventory_item_id
-* user_id
-* event_type
-* quantity_change
-* created_at
-
-Примеры событий:
-
-ADD
-
-REMOVE
-
-USE
-
-ADJUST
-
-OPEN
-
-EXPIRE
-
-Конкретный набор event types можно окончательно определить при реализации inventory.
-
-Главная идея:
-
-не просто хранить текущее quantity,
-
-а иметь историю того, как оно изменялось.
-
-Например:
-
-10 → -1 → -2 → +5
-
-История позволяет понимать:
-
-кто изменил запас;
-
-когда;
-
-на сколько.
-
----
-
-# 30. TrackedProduct
-
-Таблица:
-
-tracked_product
-
-предназначена для продуктов, которые пользователь хочет отслеживать.
-
-Поля:
-
-* household_id
-* product_id
-* minimum_quantity
-* created_at
-* updated_at
-
-Есть unique constraint:
-
-(household_id, product_id)
-
-Например:
-
-Milk
-minimum_quantity = 2
-
-Когда количество становится <= 2, продукт считается нуждающимся в пополнении.
-
-В будущем это может использоваться для:
-
-* shopping list;
-* уведомлений;
-* автоматических рекомендаций.
-
----
-
-# 31. Receipt
-
-Receipt представляет чек покупки.
-
-Поля:
-
-* household_id
-* user_id
-* store_name
-* purchase_date
-* total_amount
-* image_path
-* created_at
-
-Чек принадлежит household.
-
-Пользователь может быть сохранён как тот, кто загрузил чек.
-
----
-
-# 32. ReceiptItem
-
-ReceiptItem — отдельная позиция из чека.
-
-Поля:
-
-* receipt_id
-* product_id
-* raw_name
-* quantity
-* unit_price
-* total_price
-* matching_confidence
-* created_at
-
-`raw_name` хранит исходное название, распознанное OCR.
-
-`product_id` может быть NULL, если товар ещё не сопоставлен.
-
-`matching_confidence` показывает уверенность алгоритма сопоставления.
-
----
-
-# 33. OCR pipeline
-
-Будущая архитектура обработки чека:
-
-Фото чека
-↓
-OCR
-↓
-распознанный текст
-↓
-выделение товарных позиций
-↓
-нормализация названий
-↓
-matching с Product
-↓
-confidence score
-↓
-ReceiptItem
-↓
-подтверждение пользователем
-↓
-InventoryItem
-
-Важно не считать OCR полностью достоверным.
-
-OCR может:
-
-* ошибиться в символе;
-* неправильно разделить строки;
-* спутать цену и количество;
-* неправильно распознать название продукта.
-
-Поэтому matching должен иметь confidence.
-
----
-
-# 34. Product matching
-
-Система должна сопоставлять OCR-название с существующими Product.
-
-Например OCR:
-
-"Молоко Простоквашино 3,2% 930мл"
-
-может быть сопоставлено с:
-
-Product:
-"Молоко 3.2%"
-Brand:
-"Простоквашино"
-
-Алгоритм matching в будущем может использовать:
-
-* barcode;
-* normalized name;
-* brand;
-* category;
-* package size;
-* fuzzy matching;
-* embeddings/ML при необходимости.
-
-Не следует сразу использовать сложную ML-модель.
-
-Сначала лучше сделать deterministic/fuzzy baseline.
-
----
-
-# 35. API architecture
-
-Общая схема:
-
-Android
-↓
-HTTP/JSON
-↓
-FastAPI
-↓
-API router
-↓
-Service
-↓
-SQLAlchemy
-↓
-PostgreSQL
-
-API не должен напрямую содержать сложные SQL/business rules.
-
-Например endpoint должен быть похож на:
-
-current_user = Depends(get_current_user)
-
-result = service_function(...)
-
-return result
-
-А сложные проверки должны находиться в service.
-
----
-
-# 36. Pydantic schemas
-
-Schemas используются для API contract.
-
-Например HouseholdCreate:
-
-name
-
-HouseholdResponse:
-
-id
-name
-created_at
-updated_at
-
-Nested member response:
-
-user
-role
-joined_at
-
-Для ORM objects используется:
-
-ConfigDict(from_attributes=True)
-
----
-
-# 37. Alembic
-
-Alembic используется для изменения схемы БД.
-
-Initial migration создала основные таблицы.
-
-Последующие migrations:
-
-* добавляли inventory event fields/index;
-* добавляли refresh_token;
-* добавляли PostgreSQL ENUM household_role;
-* меняли household_member.role на этот ENUM.
-
-При изменении моделей:
-
-1. изменить SQLAlchemy model;
-2. создать migration;
-3. проверить migration;
-4. применить upgrade;
-5. проверить БД.
-
-Нельзя просто изменять существующую БД вручную и считать это завершённым изменением.
-
----
-
-# 38. PostgreSQL ENUM
-
-HouseholdRole использует PostgreSQL enum:
-
-household_role
-
-Значения:
-
-OWNER
-ADMIN
-MEMBER
-
-SQLAlchemy:
-
-Enum(
-HouseholdRole,
-name="household_role",
-)
-
-Важно, чтобы Alembic корректно создавал и изменял enum.
-
----
-
-# 39. Current main.py
-
-FastAPI application:
-
-app = FastAPI(
-title="Smart Pantry API",
-version="0.1.0",
-)
-
-Подключены:
-
-auth router
-household router
-
-Есть:
-
-GET /
-
-возвращающий:
-
-{
-"message": "Smart Pantry API",
-"status": "OK"
-}
-
----
-
-# 40. Реализованное состояние проекта
-
-На текущий момент уже работают:
-
-* PostgreSQL;
-* Docker database;
-* SQLAlchemy;
-* Alembic;
-* User model;
-* registration;
-* login;
-* password hashing;
-* access JWT;
-* refresh JWT;
-* refresh token persistence;
-* refresh rotation;
-* logout/revocation;
-* `/auth/me`;
-* Household model;
-* HouseholdMember;
-* household roles;
-* household creation;
-* 5-household creation limit;
-* 20-member limit;
-* household listing;
-* household access checking;
-* member listing;
-* adding members;
-* role changes;
-* member removal;
-* leaving household;
-* automatic ownership transfer;
-* automatic household deletion when owner leaves alone.
-* product get, create, search
-
-Все эти функции уже тестировались через API и работают.
-
----
-
-# 41. Следующий этап разработки
-
-После household refactor логичный следующий большой блок:
-
-PRODUCT + INVENTORY.
-
-Рекомендуемый порядок:
-
-1. InventoryItem model.
-2. Inventory schemas.
-3. Inventory service.
-4. Inventory CRUD.
-5. Проверка household permissions для inventory.
-6. Inventory events.
-7. TrackedProduct.
-8. Expiry logic.
-9. Shopping/low-stock logic.
-10. Receipt.
-11. ReceiptItem.
-12. OCR.
-13. Product matching.
-14. Notifications.
-15. Redis/Celery.
-16. Android client.
-17. Tests.
-18. Docker.
-19. CI/CD.
-
----
-
-# 42. Важный принцип разработки
-
-Проект следует развивать постепенно.
-
-Не нужно одновременно создавать:
-
-OCR + Redis + Celery + FCM + Android + ML.
-
-Сначала должна появиться стабильная backend domain model.
-
-Рекомендуемый dependency order:
-
-Authentication
-↓
-Households
-↓
-Products
-↓
-Inventory
-↓
-Tracking
-↓
-Receipts
-↓
-OCR
-↓
-Notifications
-↓
-Async jobs
-↓
-Android
-
----
-
-# 43. Что особенно важно при дальнейшем развитии
-
-Каждый новый endpoint, работающий с household-owned данными, должен проверять membership.
-
-Например:
-
-GET /inventory
-
-не должен просто делать:
-
-select(InventoryItem)
-
-Он должен ограничивать результаты household, к которым пользователь имеет доступ.
-
-То же относится к:
-
-* products, если они household-specific;
-* inventory;
-* tracked products;
-* receipts;
-* shopping lists.
-
-Нельзя доверять `household_id`, переданному клиентом.
-
-Backend всегда должен самостоятельно проверять:
-
-current_user
-+
-household_id
-↓
-есть ли membership?
-
----
-
-# 44. Security principles
-
-Нельзя доверять Android-клиенту.
-
-Все ограничения проверяются backend.
-
-Нельзя доверять:
-
-* user_id;
-* role;
-* household membership;
-* quantity;
-* ownership;
-* permissions.
-
-Например клиент не должен отправлять:
-
-{
-"user_id": 123,
-"role": "OWNER"
-}
-
-и ожидать, что backend этому поверит.
-
-Текущий пользователь определяется по JWT.
-
-Роль определяется по БД.
-
----
-
-# 45. Transaction principle
-
-Изменение нескольких связанных объектов должно выполняться в одной транзакции.
-
-Например создание household:
-
-1. создать Household;
-2. получить id через flush;
-3. создать OWNER membership;
-4. commit.
-
-Ownership transfer:
-
-1. выбрать нового owner;
-2. изменить его role;
-3. удалить старый membership;
-4. commit.
-
-Это должно происходить атомарно.
-
----
-
-# 46. Возможные будущие улучшения
-
-После базовой реализации можно улучшить:
-
-* централизованные FastAPI exception handlers;
-* dependency для получения HouseholdMember;
-* transaction helpers;
-* database locking для конкурентных ownership операций;
-* repository layer, если services станут слишком большими;
-* полноценные unit tests;
-* integration tests;
-* pagination;
-* filtering;
-* sorting;
-* OpenAPI documentation;
-* structured logging;
-* Docker Compose;
-* CI через GitHub Actions.
-
-Не следует добавлять эти уровни заранее без необходимости.
-
----
-
-# 47. Общий принцип архитектуры
-
-Smart Pantry должен оставаться относительно простым CRUD/business application с отдельными ML-компонентами.
-
-Основной backend:
-
-Authentication
-
-* authorization
-* households
-* products
-* inventory
-* receipts
-* notifications
-
-ML/OCR:
-
-отдельный слой, который помогает распознавать и сопоставлять данные.
-
-ML не должен управлять основной бизнес-логикой.
-
----
-
-# 48. Как продолжать работу над проектом
-
-При дальнейшем изменении проекта сначала нужно проверить:
-
-1. какие модели уже существуют;
-2. какие migrations уже применены;
-3. какие endpoints уже работают;
-4. какие business rules уже определены;
-5. какие тесты уже существуют.
-
-Нельзя переписывать существующую архитектуру без необходимости.
-
-Если функция уже работает, изменение должно быть incremental.
-
-При добавлении новой функции нужно определить:
-
-* model;
-* schema;
-* service;
-* API;
-* migration;
-* permissions;
-* tests.
-
----
-
-# 49. Текущее состояние
-
-Household subsystem считается практически завершённой после текущего рефактора.
-
-Следующий основной фокус:
-
-INVENTORY
-
-Первая задача следующего этапа:
-
-проверить текущую модель Product и реализовать полноценный Product CRUD с учётом Category и barcode.
-
-После этого перейти к InventoryItem и связать конкретные запасы с household и Product.
-
-Главная цель ближайшего этапа:
-
-получить рабочую цепочку:
-
-User
-↓
-Household
-↓
-Product
-↓
-InventoryItem
-↓
-InventoryEvent
-
-После появления этой цепочки приложение уже будет иметь основное ядро системы учёта продуктов.
+- В репозитории нет Android-клиента; Swagger используется для проверки API.
+- Ollama — отдельный процесс и не входит в Compose как контейнер.
+- MinerU, EasyOCR и PaddleOCR могут требовать значительных ресурсов и загружать модели при первом запуске.
+- Ветка OCR возвращает распознанные позиции и кандидатов, но не должна автоматически сохранять их в инвентарь.
+- Набор результатов в `ml/results/` — сохранённые артефакты экспериментов, а не гарантированный эталон качества.
