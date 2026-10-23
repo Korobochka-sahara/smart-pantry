@@ -16,6 +16,7 @@ FastAPI-приложение Smart Pantry: HTTP API, аутентификаци�
 - `tests/` — тесты API.
 - `requirements.txt` — единственный список зависимостей backend.
 - `Dockerfile` — контейнерный образ backend.
+- `run_local.ps1` — файл для запуска backend.
 
 ## Локальный запуск (PowerShell)
 
@@ -29,7 +30,7 @@ python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 # Отредактируй .env: DATABASE_URL и SECRET_KEY
 alembic upgrade head
-python -m uvicorn app.main:app --reload
+.\run_local.ps1
 ```
 
 Swagger: http://127.0.0.1:8000/docs. PostgreSQL должен быть запущен. По умолчанию локальная конфигурация ожидает `localhost:5433`.

@@ -29,7 +29,7 @@ Smart Pantry — клиент-серверный проект для учёта 
                                   +-- MinerU
 ```
 
-В Docker Compose поднимаются **три контейнера**: `backend`, `ml` и `postgres`. Два контейнера приложения — backend и ML; PostgreSQL — отдельная инфраструктурная БД. Ollama/Qwen — отдельный runtime: в текущей конфигурации он должен быть доступен backend по адресу `OLLAMA_HOST` (по умолчанию клиент Ollama использует `http://localhost:11434`). Если backend работает в Docker Desktop, укажи `OLLAMA_HOST=http://host.docker.internal:11434`, когда Ollama запущен на Windows-хосте. Модель должна быть скачана в Ollama, например `ollama pull qwen2.5:7b-instruct`.
+В Docker Compose поднимаются **три контейнера**: `backend`, `ml` и `postgres`. Два контейнера приложения — backend и ML; PostgreSQL — отдельная инфраструктурная БД. Ollama/Qwen — отдельный runtime: в текущей конфигурации он должен быть доступен backend по адресу `OLLAMA_HOST` (по умолчанию клиент Ollama использует `http://localhost:11434`). Если backend работает в Docker Desktop, укажите `OLLAMA_HOST=http://host.docker.internal:11434`, когда Ollama запущен на Windows-хосте. Модель должна быть скачана в Ollama, например `ollama pull qwen2.5:7b-instruct`.
 
 ### Поток OCR
 
@@ -94,16 +94,13 @@ README в соответствующих каталогах дополняют �
 - MinerU может скачать модели при первом запуске; подготовь свободное место на диске и дождись загрузки.
 - Для ручных экспериментов EasyOCR/PaddleOCR нужны дополнительные модели и ресурсы. GPU не обязателен для CPU-режима, но распознавание будет медленнее.
 
-В проекте оставлены **ровно два канонических файла зависимостей**: `backend/requirements.txt` и `ml/requirements.txt`. Старый корневой `requirements.txt`, который смешивал зависимости обеих сред и был сохранён в UTF-16, удалён.
+В проекте есть два файла зависимостей: `backend/requirements.txt` и `ml/requirements.txt`.
 
 ## Быстрый запуск через Docker
 
 Из корня репозитория:
 
 ```powershell
-# 1. (Рекомендуется) создавать корневой .env для Compose-переменных,
-#    например SECRET_KEY и OLLAMA_HOST. Не коммитеть этот файл.
-# 2. Запустить сборку и три сервиса
 docker compose up --build
 ```
 
@@ -189,7 +186,7 @@ cd ocr_service
 python -m uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-Локальный backend по умолчанию обращается к `http://127.0.0.1:8001`. Если меняете адрес ML-сервиса, установиье `MINERU_BASE_URL` в окружении backend.
+Локальный backend по умолчанию обращается к `http://127.0.0.1:8001`. Если меняете адрес ML-сервиса, установите `MINERU_BASE_URL` в окружении backend.
 
 ### 4. Проверка OCR
 
