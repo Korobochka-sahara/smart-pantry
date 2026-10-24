@@ -20,3 +20,23 @@ __pycache__/
 blobs/
 .cache/
 **/.cache/
+
+
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+*.iml
+
+# Android Studio / IntelliJ
+.idea/
+.kotlin/
+
+# Generated APKs and bundles
+*.apk
+*.aab
+
+# Operating systems
+.DS_Store
+Thumbs.db
+Desktop.ini
