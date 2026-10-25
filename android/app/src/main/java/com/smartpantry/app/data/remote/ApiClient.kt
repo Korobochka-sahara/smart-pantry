@@ -29,4 +29,6 @@ object ApiClient {
     //создаёт реализацию интерфейса AuthApi, которая действительно отправляет HTTP-запросы
     val householdApi: HouseholdApi =
         retrofit.create(HouseholdApi::class.java)
+    val inventoryApi: InventoryApi =
+        retrofit.create(InventoryApi::class.java)
 }

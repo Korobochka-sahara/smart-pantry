@@ -1,11 +1,11 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, EmailStr, AliasPath
 
 from app.enums.household import HouseholdRole
 
 class HouseholdCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=100)
 
 class HouseholdResponse(BaseModel):
     id: int
@@ -18,6 +18,8 @@ class HouseholdResponse(BaseModel):
 
 class HouseholdMemberResponse(BaseModel):
     user_id: int
+    username: str = Field(validation_alias=AliasPath("user", "username"))
+    email: EmailStr = Field(validation_alias=AliasPath("user", "email"))
     role: HouseholdRole
     joined_at: datetime
 

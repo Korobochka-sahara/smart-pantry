@@ -1,6 +1,7 @@
 package com.smartpantry.app.data.remote
 
 import com.smartpantry.app.data.model.LoginRequest
+import com.smartpantry.app.data.model.LogoutRequest
 import com.smartpantry.app.data.model.RegisterRequest
 import com.smartpantry.app.data.model.RefreshRequest
 import com.smartpantry.app.data.model.TokenResponse
@@ -9,6 +10,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.Response
 
 interface AuthApi { //описание операций, которые предоставляет сервер
 
@@ -32,4 +34,9 @@ interface AuthApi { //описание операций, которые пред
     suspend fun refresh(
         @Body request: RefreshRequest
     ): TokenResponse
+
+    @POST("auth/logout")
+    suspend fun logout(
+        @Body request: LogoutRequest
+    ): Response<Unit>
 }

@@ -21,6 +21,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import com.smartpantry.app.data.local.TokenStorage
+import com.smartpantry.app.data.model.LogoutRequest
+import com.smartpantry.app.data.remote.ApiClient
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import com.smartpantry.app.data.session.SessionManager
 import com.smartpantry.app.data.session.SessionState
 import com.smartpantry.app.ui.screens.auth.AuthScreen
@@ -29,6 +33,7 @@ import com.smartpantry.app.ui.screens.home.HomeScreen
 @Composable
 fun SessionGate() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var retryTrigger by remember { mutableIntStateOf(0) }
     var sessionState by remember { mutableStateOf<SessionState?>(null) }
@@ -55,8 +60,19 @@ fun SessionGate() {
             HomeScreen(
                 user = state.user,
                 onLogout = {
-                    TokenStorage.clear(context)
-                    sessionState = SessionState.Unauthenticated
+                    scope.launch {
+                        val refreshToken = TokenStorage.getRefreshToken(context)
+                        try {
+                            if (refreshToken != null) {
+                                ApiClient.authApi.logout(LogoutRequest(refresh_token = refreshToken))
+                            }
+                        } catch (_: Exception) {
+                            // Выход на устройстве должен сработать и без сети.
+                        } finally {
+                            TokenStorage.clear(context)
+                            sessionState = SessionState.Unauthenticated
+                        }
+                    }
                 }
             )
         }

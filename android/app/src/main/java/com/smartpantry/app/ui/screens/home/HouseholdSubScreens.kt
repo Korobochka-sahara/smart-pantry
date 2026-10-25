@@ -143,7 +143,7 @@ fun HouseholdSettingsScreen(
                                                     memberForRoleChange = member
                                                 }
                                             ) {
-                                                Text("Выдать админку")
+                                                Text("Дать права администратора")
                                             }
                                         } else if (memberRole == "ADMIN" && isOwner) {
                                             OutlinedButton(
@@ -152,7 +152,7 @@ fun HouseholdSettingsScreen(
                                                     memberForRoleChange = member
                                                 }
                                             ) {
-                                                Text("Снять админку")
+                                                Text("Отнять права администратора")
                                             }
                                         }
 
@@ -226,14 +226,18 @@ fun HouseholdSettingsScreen(
                     if (newRole == "ADMIN") {
                         "Выдать права администратора?"
                     } else {
-                        "Снять права администратора?"
+                        "Отнять права администратора?"
                     }
                 )
             },
             text = {
                 Text(
-                    "Пользователь #${member.user_id}: " +
-                            "${roleLabel(memberRole)} → ${roleLabel(newRole)}."
+                    if (newRole == "ADMIN") {
+                        "Пользователь #${member.user_id} получит возможность удалять и добавлять участников."
+                    }
+                    else{
+                        "Пользователь #${member.user_id} потеряет возможность удалять и добавлять участников."
+                    }
                 )
             },
             confirmButton = {
@@ -290,8 +294,7 @@ fun HouseholdSettingsScreen(
             text = {
                 Text(
                     if (isOwner) {
-                        "Ты владелец дома. Сервер может запретить выход, " +
-                                "если сначала нужно передать владение."
+                        "Ты владелец дома. Если ты покинешь дом - владение передастся кому-то ещё"
                     } else {
                         "Ты потеряешь доступ к продуктам и участникам этого дома."
                     }
@@ -365,45 +368,6 @@ private fun roleLabel(role: String): String = when (role.uppercase()) {
     "ADMIN" -> "Администратор"
     "MEMBER" -> "Участник"
     else -> role
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun InventoryScreen(
-    household: HouseholdResponse,
-    onBack: () -> Unit
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Продукты") },
-                navigationIcon = {
-                    TextButton(onClick = onBack) {
-                        Text("Назад")
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(household.name, style = MaterialTheme.typography.titleMedium)
-            Text("ID дома: ${household.id}")
-            Text(
-                "Здесь будет список продуктов этого дома.",
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Text(
-                "Следующий этап — подключить API запасов: загрузку продуктов, " +
-                        "поиск, добавление и изменение количества."
-            )
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
