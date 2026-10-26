@@ -46,6 +46,7 @@ import com.smartpantry.app.data.model.HouseholdMemberResponse
 import com.smartpantry.app.data.model.HouseholdResponse
 import com.smartpantry.app.data.model.UserResponse
 import com.smartpantry.app.data.remote.ApiClient
+import com.smartpantry.app.data.remote.ApiErrorFormatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
@@ -149,8 +150,8 @@ fun HomeScreen(
                         error = when (e.code()) {
                             409 -> "Нельзя создать домохозяйство: достигнут лимит в 5 домов, где ты владелец."
                             401 -> "Сессия истекла. Войди в приложение снова."
-                            422 -> "Проверь название домохозяйства."
-                            else -> "Не удалось создать домохозяйство: ${e.code()}"
+                            422 -> "Сервер не принял данные: ${ApiErrorFormatter.detail(e) ?: "проверь название домохозяйства (от 1 до 100 символов)."}"
+                            else -> "Не удалось создать домохозяйство: ${ApiErrorFormatter.detail(e) ?: e.code().toString()}"
                         }
                     } catch (e: IOException) {
                         error = "Нет соединения с сервером."
@@ -176,7 +177,7 @@ fun HomeScreen(
                         onClick = { selectedTab = tab },
                         icon = {
                             Text(
-                                if (tab == MainTab.HOUSEHOLDS) "⌂" else "●"
+                                if (tab == MainTab.HOUSEHOLDS) "⌂" else "👤"
                             )
                         },
                         label = { Text(tab.title) }
@@ -297,7 +298,7 @@ private fun CreateHouseholdDialog(
         text = {
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = { if (it.length <= 100) name = it },
                 label = { Text("Название") },
                 placeholder = { Text("Например, Дом родителей") },
                 singleLine = true,

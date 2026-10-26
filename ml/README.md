@@ -9,7 +9,8 @@
 - `test_images/` — входные изображения чеков.
 - `results/` — сохранённые JSON-результаты по OCR-движкам.
 - `tests/` — тесты очистки MinerU и LLM-парсера.
-- `requirements.txt` — единственный список зависимостей ML и OCR-экспериментов.
+- `requirements.txt` — список зависимостей ML и OCR-экспериментов для docker/linux.
+- `requirements.txt` — список зависимостей ML и OCR-экспериментов для Windows.
 - `Dockerfile` — образ HTTP OCR-сервиса.
 
 ## Установка и запуск локально
@@ -19,7 +20,7 @@ cd ml
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-ocr-windows.txt
 $env:MINERU_TIER = "standard"
 cd ocr_service
 python -m uvicorn main:app --host 127.0.0.1 --port 8001 --reload
@@ -51,4 +52,4 @@ python ml/ocr/easyocr_test.py
 python ml/ocr/paddleocr_test.py
 ```
 
-Для CLI MinerU и трактовки результатов см. `ocr/README.md`. JSON-результаты — исследовательские артефакты, не гарантия точности для любого чека.
+Для CLI MinerU и трактовки результатов см. `ocr_service/README.md`. JSON-результаты — исследовательские артефакты, не гарантия точности для любого чека.

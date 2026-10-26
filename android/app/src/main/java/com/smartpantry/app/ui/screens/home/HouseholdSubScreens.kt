@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import com.smartpantry.app.data.model.HouseholdMemberResponse
 import com.smartpantry.app.data.model.HouseholdResponse
 
@@ -99,11 +100,21 @@ fun HouseholdSettingsScreen(
             } else if (members.isEmpty()) {
                 Text("Список участников пуст.")
             } else {
+                val orderedMembers = members.sortedWith(
+                    compareBy<HouseholdMemberResponse> {
+                        when {
+                            it.user_id == currentUserId -> 0
+                            it.role.uppercase() == "OWNER" -> 1
+                            it.role.uppercase() == "ADMIN" -> 2
+                            else -> 3
+                        }
+                    }.thenBy { it.username.lowercase() }
+                )
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(members, key = { it.user_id }) { member ->
+                    items(orderedMembers, key = { it.user_id }) { member ->
                         val memberRole = member.role.uppercase()
                         val isSelf = member.user_id == currentUserId
 
@@ -113,21 +124,31 @@ fun HouseholdSettingsScreen(
                                 memberRole != "OWNER" &&
                                 (isOwner || memberRole == "MEMBER")
 
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        val cardColor = when (memberRole) {
+                            "OWNER" -> Color(0xFFFFE3E3)
+                            "ADMIN" -> Color(0xFFEDE3FF)
+                            else -> MaterialTheme.colorScheme.surface
+                        }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = androidx.compose.material3.CardDefaults.cardColors(
+                                containerColor = cardColor
+                            )
+                        ) {
                             Column(
                                 modifier = Modifier.padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = buildString {
-                                        append("Пользователь #${member.user_id}")
+                                        append(member.username)
                                         if (isSelf) append(" · ты")
                                     },
                                     style = MaterialTheme.typography.titleMedium
                                 )
                                 Text("Роль: ${roleLabel(memberRole)}")
                                 Text(
-                                    "Дата вступления: ${member.joined_at}",
+                                    "Дата вступления: ${formatJoinedDate(member.joined_at)}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
 
@@ -185,10 +206,24 @@ fun HouseholdSettingsScreen(
                 }
             }
 
+            Text("Участники: ${members.size}/20", style = MaterialTheme.typography.bodySmall)
+            if (members.size >= 18 && members.size < 20) {
+                Text(
+                    "Внимание: в домохозяйстве может быть не больше 20 участников.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (members.size >= 20) {
+                Text(
+                    "Достигнут лимит: в домохозяйстве уже 20 участников. Добавить новых нельзя.",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             if (canManageMembers) {
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isWorking,
+                    enabled = !isWorking && members.size < 20,
                     onClick = { showAddDialog = true }
                 ) {
                     Text("Добавить участника по ID")
@@ -233,10 +268,10 @@ fun HouseholdSettingsScreen(
             text = {
                 Text(
                     if (newRole == "ADMIN") {
-                        "Пользователь #${member.user_id} получит возможность удалять и добавлять участников."
+                        "Пользователь ${member.username} получит возможность удалять и добавлять участников."
                     }
                     else{
-                        "Пользователь #${member.user_id} потеряет возможность удалять и добавлять участников."
+                        "Пользователь ${member.username} потеряет возможность удалять и добавлять участников."
                     }
                 )
             },
@@ -406,4 +441,11 @@ fun TrackedProductsScreen(
             )
         }
     }
+}
+
+private fun formatJoinedDate(value: String): String {
+    // FastAPI serializes datetime as ISO-8601: yyyy-MM-ddTHH:mm:ss.
+    val date = value.substringBefore('T').substringBefore(' ')
+    val parts = date.split('-')
+    return if (parts.size == 3) "${parts[2]}.${parts[1]}.${parts[0]}" else value
 }

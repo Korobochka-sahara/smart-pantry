@@ -7,8 +7,7 @@ from app.schemas.ocr import OCRResponse
 class MinerUClient:
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:8001",
-        timeout: float = 300.0,
+        base_url: str = "http://ml:8001",
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = httpx.Timeout(

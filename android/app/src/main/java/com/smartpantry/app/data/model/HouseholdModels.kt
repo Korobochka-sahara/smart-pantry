@@ -18,6 +18,8 @@ data class CreateHouseholdRequest(
 @Serializable
 data class HouseholdMemberResponse(
     val user_id: Int,
+    val username: String,
+    val email: String,
     val role: String,
     val joined_at: String
 )

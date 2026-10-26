@@ -12,7 +12,7 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 
 ```powershell
 curl.exe http://127.0.0.1:8001/health
-curl.exe -X POST "http://127.0.0.1:8001/ocr" -F "file=@../test_images/receipt_01.jpg;type=image/jpeg"
+curl.exe -X POST "http://127.0.0.1:8001/ocr" -F "file=../test_images/receipt_01.jpg;type=image/jpeg"
 ```
 
-В контейнере сервис должен слушать `0.0.0.0:8001`. Настройки: `MINERU_TIER` (`standard` по умолчанию). Не выводи содержимое чеков целиком в обычные production-логи.
+В контейнере сервис должен слушать `0.0.0.0:8001`. Настройки: `MINERU_TIER` (`standard` по умолчанию). Не выводите содержимое чеков целиком в обычные production-логи.

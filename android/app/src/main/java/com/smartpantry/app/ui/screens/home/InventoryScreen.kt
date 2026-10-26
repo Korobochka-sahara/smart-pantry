@@ -44,6 +44,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.io.IOException
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import com.smartpantry.app.data.model.OCRResponse
+import com.smartpantry.app.data.model.OCRCandidate
+import java.net.SocketTimeoutException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +69,90 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
     var isWorking by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var refreshKey by remember { mutableStateOf(0) }
+    var editedQuantities by remember {
+        mutableStateOf<Map<Int, String>>(emptyMap())
+    }
+    var isRecognizing by remember {
+        mutableStateOf(false)
+    }
+
+    var receiptResult by remember {
+        mutableStateOf<OCRResponse?>(null)
+    }
+
+    var receiptError by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            android.util.Log.d("ReceiptOCR", "Выбрана фотография: $uri")
+            scope.launch {
+                isRecognizing = true
+                receiptError = null
+                receiptResult = null
+
+                try {
+                    val bytes = context.contentResolver
+                        .openInputStream(uri)
+                        ?.use { it.readBytes() }
+                        ?: throw IOException(
+                            "Не удалось прочитать изображение"
+                        )
+
+                    val body = bytes.toRequestBody(
+                        "image/jpeg".toMediaType()
+                    )
+
+                    val part = MultipartBody.Part.createFormData(
+                        "file",
+                        "receipt.jpg",
+                        body
+                    )
+                    android.util.Log.d(
+                        "ReceiptOCR",
+                        "Отправка OCR: ${bytes.size} bytes"
+                    )
+                    receiptResult =
+                        ApiClient.ocrApi.recognizeReceipt(part)
+
+                    if (receiptResult?.items.isNullOrEmpty()) {
+                        receiptError =
+                            "Не удалось найти товары в чеке."
+                    }
+                } catch (e: HttpException) {
+                    android.util.Log.e(
+                        "ReceiptOCR",
+                        "HTTP ${e.code()}: ${e.response()?.errorBody()?.string()}",
+                        e
+                    )
+                    receiptError = "Ошибка сервера: ${e.code()}"
+                } catch (e: java.net.SocketTimeoutException) {
+                    android.util.Log.e("ReceiptOCR", "Таймаут OCR", e)
+                    receiptError =
+                        "Распознавание занимает слишком много времени. Попробуй ещё раз."
+                } catch (e: IOException) {
+                    android.util.Log.e("ReceiptOCR", "Ошибка чтения файла или сети", e)
+                    receiptError = "Ошибка соединения: ${e.message}"
+                } catch (e: Exception) {
+                    android.util.Log.e("ReceiptOCR", "Неожиданная ошибка", e)
+                    receiptError =
+                        "${e.javaClass.simpleName}: ${e.message ?: "Неизвестная ошибка"}"
+                } finally {
+                    isRecognizing = false
+                }
+            }
+        }
+    }
+    var selectedOCRCandidates by remember {
+        mutableStateOf<Map<Int, OCRCandidate>>(emptyMap())
+    }
+
+    var ocrQuantities by remember {
+        mutableStateOf<Map<Int, String>>(emptyMap())
+    }
 
     fun tokenOrThrow(): String = TokenStorage.getAccessToken(context)
         ?: throw IllegalStateException("Сессия не найдена. Войди в приложение снова.")
@@ -147,6 +240,25 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
                     }
                 }) { Text("Найти") }
             }
+            OutlinedButton(
+                enabled = !isRecognizing && !isWorking,
+                onClick = {
+                    imagePicker.launch("image/*")
+                }
+            ) {
+                Text("Добавить продукты по чеку")
+            }
+
+            if (isRecognizing) {
+                CircularProgressIndicator()
+            }
+
+            receiptError?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             if (searchResults.isNotEmpty()) {
                 Text("Выбери продукт из результатов:", style = MaterialTheme.typography.bodyMedium)
                 LazyColumn(modifier = Modifier.weight(0.8f, fill = false), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -163,6 +275,116 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
                     }
                 }
             }
+            receiptResult?.let { result ->
+                Text(
+                    "Проверь распознанные товары",
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                result.items.forEachIndexed { index, item ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(item.raw_name)
+
+                            OutlinedTextField(
+                                value = ocrQuantities[index]
+                                    ?: (item.quantity ?: 1.0).toString(),
+                                onValueChange = {
+                                    ocrQuantities =
+                                        ocrQuantities + (index to it)
+                                },
+                                label = { Text("Количество") },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal
+                                ),
+                                singleLine = true
+                            )
+
+                            if (item.candidates.isEmpty()) {
+                                Text(
+                                    "Совпадений в каталоге не найдено.",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            } else {
+                                item.candidates.forEach { candidate ->
+                                    val selected =
+                                        selectedOCRCandidates[index]?.product_id ==
+                                                candidate.product_id
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedOCRCandidates =
+                                                selectedOCRCandidates +
+                                                        (index to candidate)
+                                        }
+                                    ) {
+                                        Text(
+                                            (if (selected) "✓ " else "") +
+                                                    candidate.name +
+                                                    (candidate.brand?.let { " · $it" } ?: "") +
+                                                    " · ${candidate.score.toInt()}%"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Button(
+                    enabled = !isWorking &&
+                            result.items.indices.any {
+                                selectedOCRCandidates.containsKey(it)
+                            },
+                    onClick = {
+                        val selectedItems = result.items.indices.mapNotNull { index ->
+                            val candidate = selectedOCRCandidates[index]
+                                ?: return@mapNotNull null
+
+                            val quantity = (
+                                    ocrQuantities[index]
+                                        ?: (result.items[index].quantity ?: 1.0).toString()
+                                    ).replace(',', '.').toDoubleOrNull()
+
+                            if (quantity == null || quantity <= 0.0) {
+                                null
+                            } else {
+                                candidate to quantity
+                            }
+                        }
+
+                        if (selectedItems.isEmpty()) {
+                            receiptError =
+                                "Выбери продукты и укажи корректное количество."
+                            return@Button
+                        }
+
+                        performInventoryAction { token ->
+                            selectedItems.forEach { (candidate, quantity) ->
+                                ApiClient.inventoryApi.addInventoryItem(
+                                    "Bearer $token",
+                                    household.id,
+                                    InventoryItemCreateRequest(
+                                        product_id = candidate.product_id,
+                                        quantity = quantity
+                                    )
+                                )
+                            }
+                        }
+
+                        receiptResult = null
+                        selectedOCRCandidates = emptyMap()
+                        ocrQuantities = emptyMap()
+                    }
+                ) {
+                    Text("Добавить выбранные продукты")
+                }
+            }
             Text("Текущие запасы", style = MaterialTheme.typography.titleMedium)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (isLoading) CircularProgressIndicator()
@@ -174,7 +396,76 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
                         Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(product?.name ?: "Продукт #${item.product_id}", style = MaterialTheme.typography.titleMedium)
                             product?.brand?.let { Text(it) }
-                            Text("Количество: ${item.quantity} ${product?.unit.orEmpty()}".trim())
+                            val quantityText = editedQuantities[item.product_id]
+                                ?: item.quantity.toString()
+
+                            OutlinedTextField(
+                                value = quantityText,
+                                onValueChange = { value ->
+                                    editedQuantities = editedQuantities +
+                                            (item.product_id to value)
+                                },
+                                label = { Text("Количество (${product?.unit.orEmpty()})") },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal
+                                ),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    enabled = !isWorking &&
+                                            quantityText.replace(',', '.')
+                                                .toDoubleOrNull()?.let { it >= 0.0 } == true,
+                                    onClick = {
+                                        val newQuantity = quantityText
+                                            .replace(',', '.')
+                                            .toDoubleOrNull() ?: return@Button
+
+                                        performInventoryAction { token ->
+                                            if (newQuantity == 0.0) {
+                                                val response =
+                                                    ApiClient.inventoryApi.deleteInventoryItem(
+                                                        "Bearer $token",
+                                                        household.id,
+                                                        item.product_id
+                                                    )
+
+                                                if (!response.isSuccessful) {
+                                                    throw IllegalStateException(
+                                                        "Не удалось удалить продукт"
+                                                    )
+                                                }
+                                            } else {
+                                                ApiClient.inventoryApi.updateInventoryItem(
+                                                    "Bearer $token",
+                                                    household.id,
+                                                    item.product_id,
+                                                    InventoryItemUpdateRequest(newQuantity)
+                                                )
+                                            }
+                                        }
+
+                                        editedQuantities =
+                                            editedQuantities - item.product_id
+                                    }
+                                ) {
+                                    Text("Сохранить")
+                                }
+
+                                TextButton(
+                                    onClick = {
+                                        editedQuantities =
+                                            editedQuantities - item.product_id
+                                    }
+                                ) {
+                                    Text("Отмена")
+                                }
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 OutlinedButton(enabled = !isWorking && item.quantity > 0, onClick = {
                                     val newQuantity = (item.quantity - 1.0).coerceAtLeast(0.0)
@@ -230,6 +521,7 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
                 }) { Text("Добавить") }
             },
             dismissButton = { TextButton(onClick = { selectedProduct = null }) { Text("Отмена") } }
+
         )
     }
 }

@@ -30,12 +30,6 @@ services:
     volumes:
       - mineru_cache:/root/.cache
       - mineru_config:/root/.config
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5).read()"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
 
   backend:
     build:
@@ -54,7 +48,7 @@ services:
       postgres:
         condition: service_healthy
       ml:
-        condition: service_healthy
+        condition: service_started
     command: ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
 
 volumes:
