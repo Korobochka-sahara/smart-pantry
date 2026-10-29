@@ -125,4 +125,5 @@ object ApiClient {
     val inventoryApi: InventoryApi = retrofit.create(InventoryApi::class.java)
 
     val ocrApi: OCRApi = retrofit.create(OCRApi::class.java)
+    val trackedProductApi: TrackedProductApi = retrofit.create(TrackedProductApi::class.java)
 }
