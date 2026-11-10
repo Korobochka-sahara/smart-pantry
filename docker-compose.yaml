@@ -1,4 +1,21 @@
 services:
+  postgres-test:
+    image: postgres:16
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: smart_pantry_test
+      POSTGRES_USER: smart_pantry_test
+      POSTGRES_PASSWORD: smart_pantry_test_password
+    ports:
+      - "127.0.0.1:5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smart_pantry_test -d smart_pantry_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
   postgres:
     image: postgres:16
     container_name: smart-pantry-postgres
@@ -8,7 +25,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-smart_pantry}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smart_pantry_password}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +43,7 @@ services:
     environment:
       MINERU_TIER: ${MINERU_TIER:-standard}
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     volumes:
       - mineru_cache:/root/.cache
       - mineru_config:/root/.config
@@ -42,6 +59,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:-replace-this-local-development-secret-key-32-bytes-minimum}
       MINERU_BASE_URL: http://ml:8001
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     depends_on:

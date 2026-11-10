@@ -1,5 +1,6 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.enums.household import HouseholdRole
 from app.models.household import Household
@@ -187,7 +188,13 @@ def add_household_member(
     )
 
     db.add(member)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) == "23505":
+            raise HouseholdConflictError("User is already a member of this household") from error
+        raise
     db.refresh(member)
 
     return member
@@ -302,6 +309,9 @@ def leave_household(
     )
 
     # Обычный мембер или админ просто выходит
+    if current_member is None:
+        raise HouseholdNotFoundError("Household not found")
+
     if current_member.role != HouseholdRole.OWNER:
         db.delete(current_member)
         db.commit()
@@ -326,6 +336,7 @@ def leave_household(
         household = db.get(Household, household_id)
 
         db.delete(current_member)
+        db.flush()
         db.delete(household)
 
         db.commit()

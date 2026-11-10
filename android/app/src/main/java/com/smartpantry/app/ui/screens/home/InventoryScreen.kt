@@ -37,6 +37,7 @@ import com.smartpantry.app.data.local.TokenStorage
 import com.smartpantry.app.data.model.HouseholdResponse
 import com.smartpantry.app.data.model.InventoryItemCreateRequest
 import com.smartpantry.app.data.model.InventoryItemResponse
+import com.smartpantry.app.data.model.InventoryQuantityChangeRequest
 import com.smartpantry.app.data.model.InventoryItemUpdateRequest
 import com.smartpantry.app.data.model.ProductResponse
 import com.smartpantry.app.data.remote.ApiClient
@@ -59,7 +60,7 @@ import androidx.compose.foundation.layout.heightIn
 
 // Временный режим для настройки интерфейса без долгого запуска MinerU/LLM.
 // Поставить false, чтобы снова отправлять изображение на настоящий OCR.
-private const val USE_OCR_UI_MOCK = true
+private const val USE_OCR_UI_MOCK = com.smartpantry.app.BuildConfig.OCR_UI_MOCK
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -247,6 +248,7 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
                     401 -> "Сессия истекла. Войди в приложение снова."
                     403 -> "Недостаточно прав для изменения запасов."
                     404 -> "Такого продукта нет в каталоге или запасах."
+                    409 -> "Остаток уже изменился или превышает допустимое значение. Обнови список и повтори действие."
                     422 -> "Сервер отклонил количество. Укажи число больше нуля, не более 3 знаков после запятой."
                     else -> "Ошибка сервера: ${e.code()}"
                 }
@@ -444,29 +446,10 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
 
                             performInventoryAction { token ->
                                 selectedItems.forEach { (candidate, quantity) ->
-                                    val existing = ApiClient.inventoryApi
-                                        .getInventory("Bearer $token", household.id)
-                                        .firstOrNull { it.product_id == candidate.product_id }
-
-                                    if (existing == null) {
-                                        ApiClient.inventoryApi.addInventoryItem(
-                                            "Bearer $token",
-                                            household.id,
-                                            InventoryItemCreateRequest(
-                                                product_id = candidate.product_id,
-                                                quantity = quantity
-                                            )
-                                        )
-                                    } else {
-                                        ApiClient.inventoryApi.updateInventoryItem(
-                                            "Bearer $token",
-                                            household.id,
-                                            candidate.product_id,
-                                            InventoryItemUpdateRequest(
-                                                quantity = existing.quantity + quantity
-                                            )
-                                        )
-                                    }
+                                    ApiClient.inventoryApi.addInventoryItem(
+                                        "Bearer $token", household.id,
+                                        InventoryItemCreateRequest(candidate.product_id, quantity)
+                                    )
                                 }
                             }
 
@@ -508,7 +491,7 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
                                         editedQuantities = editedQuantities +
                                                 (item.product_id to value)
                                     },
-                                    label = { Text("Количество (${product?.unit.orEmpty()})") },
+                                    label = { Text("Количество (${product?.unit?.value.orEmpty()})") },
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Decimal
                                     ),
@@ -530,27 +513,10 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
                                                 .toDoubleOrNull() ?: return@Button
 
                                             performInventoryAction { token ->
-                                                if (newQuantity == 0.0) {
-                                                    val response =
-                                                        ApiClient.inventoryApi.deleteInventoryItem(
-                                                            "Bearer $token",
-                                                            household.id,
-                                                            item.product_id
-                                                        )
-
-                                                    if (!response.isSuccessful) {
-                                                        throw IllegalStateException(
-                                                            "Не удалось удалить продукт"
-                                                        )
-                                                    }
-                                                } else {
-                                                    ApiClient.inventoryApi.updateInventoryItem(
-                                                        "Bearer $token",
-                                                        household.id,
-                                                        item.product_id,
-                                                        InventoryItemUpdateRequest(newQuantity)
-                                                    )
-                                                }
+                                                ApiClient.inventoryApi.updateInventoryItem(
+                                                    "Bearer $token", household.id, item.product_id,
+                                                    InventoryItemUpdateRequest(newQuantity, item.quantity)
+                                                )
                                             }
 
                                             editedQuantities =
@@ -576,34 +542,18 @@ fun InventoryScreen(household: HouseholdResponse, onBack: () -> Unit) {
                                     OutlinedButton(
                                         enabled = !isWorking && item.quantity > 0,
                                         onClick = {
-                                            val newQuantity =
-                                                (item.quantity - 1.0).coerceAtLeast(0.0)
                                             performInventoryAction {
-                                                if (newQuantity == 0.0) {
-                                                    val response =
-                                                        ApiClient.inventoryApi.deleteInventoryItem(
-                                                            "Bearer $it",
-                                                            household.id,
-                                                            item.product_id
-                                                        )
-                                                    if (!response.isSuccessful) throw IllegalStateException(
-                                                        "Не удалось удалить продукт: ${response.code()}"
-                                                    )
-                                                } else ApiClient.inventoryApi.updateInventoryItem(
-                                                    "Bearer $it",
-                                                    household.id,
-                                                    item.product_id,
-                                                    InventoryItemUpdateRequest(newQuantity)
+                                                ApiClient.inventoryApi.adjustInventoryItem(
+                                                    "Bearer $it", household.id, item.product_id,
+                                                    InventoryQuantityChangeRequest(-1.0)
                                                 )
                                             }
                                         }) { Text("−1") }
                                     OutlinedButton(enabled = !isWorking, onClick = {
                                         performInventoryAction {
-                                            ApiClient.inventoryApi.updateInventoryItem(
-                                                "Bearer $it",
-                                                household.id,
-                                                item.product_id,
-                                                InventoryItemUpdateRequest(item.quantity + 1.0)
+                                            ApiClient.inventoryApi.addInventoryItem(
+                                                "Bearer $it", household.id,
+                                                InventoryItemCreateRequest(item.product_id, 1.0)
                                             )
                                         }
                                     }) { Text("+1") }

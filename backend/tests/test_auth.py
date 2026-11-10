@@ -21,7 +21,7 @@ def test_register_duplicate_email(client, create_user):
     assert response.status_code == 409
 
 
-def test_register_duplicate_username(client, create_user):
+def test_register_duplicate_username_is_allowed(client, create_user):
     create_user()
     
     response = client.post(
@@ -32,7 +32,8 @@ def test_register_duplicate_username(client, create_user):
             "password": "StrongPassword123!",
         },
     )
-    assert response.status_code == 409
+    assert response.status_code == 201
+    assert response.json()["username"] == "user"
 
 
 def test_login_wrong_password(client, create_user):

@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from pwdlib import PasswordHash
 from sqlalchemy.orm import Session
@@ -21,17 +22,18 @@ def register_user( db: Session, user_data: RegisterRequest) -> User:
     if existing_email is not None:
         raise ValueError("Email already registered")
 
-    existing_username = db.scalar(select(User).where(User.username == user_data.username))
-
-    if existing_username is not None:
-        raise ValueError("Username already taken")
-
     hashed_password = password_hash.hash(user_data.password)
 
     user = User(email=user_data.email, username = user_data.username, password_hash = hashed_password)
 
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) == "23505":
+            raise ValueError("Email already registered") from error
+        raise
     db.refresh(user)
 
     return user
@@ -82,7 +84,7 @@ def revoke_refresh_token(
     refresh_token_record = db.scalar(
         select(RefreshToken).where(
             RefreshToken.token_hash == token_hash
-        )
+        ).with_for_update().execution_options(populate_existing=True)
     )
 
     if (

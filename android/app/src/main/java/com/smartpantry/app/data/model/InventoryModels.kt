@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 data class InventoryItemResponse(
     val household_id: Int,
     val product_id: Int,
+    @Serializable(with = DecimalQuantitySerializer::class)
     val quantity: Double,
     val created_at: String,
     val updated_at: String
@@ -14,12 +15,16 @@ data class InventoryItemResponse(
 @Serializable
 data class InventoryItemCreateRequest(
     val product_id: Int,
+    @Serializable(with = DecimalQuantitySerializer::class)
     val quantity: Double
 )
 
 @Serializable
 data class InventoryItemUpdateRequest(
-    val quantity: Double
+    @Serializable(with = DecimalQuantitySerializer::class)
+    val quantity: Double,
+    @Serializable(with = DecimalQuantitySerializer::class)
+    val expected_quantity: Double? = null
 )
 
 @Serializable
@@ -28,8 +33,12 @@ data class ProductResponse(
     val barcode: String? = null,
     val name: String,
     val brand: String? = null,
-    val category: String,
-    val unit: String,
+    val category: ProductCategory,
+    val unit: ProductUnit,
+    @Serializable(with = DecimalQuantitySerializer::class)
     val package_quantity: Double,
-    val package_unit: String? = null
+    val package_unit: ProductUnit? = null
 )
+
+@Serializable
+data class InventoryQuantityChangeRequest(val delta: Double)

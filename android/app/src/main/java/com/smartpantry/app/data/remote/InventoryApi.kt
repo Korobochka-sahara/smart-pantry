@@ -1,5 +1,6 @@
 package com.smartpantry.app.data.remote
 
+import com.smartpantry.app.data.model.InventoryQuantityChangeRequest
 import com.smartpantry.app.data.model.InventoryItemCreateRequest
 import com.smartpantry.app.data.model.InventoryItemResponse
 import com.smartpantry.app.data.model.InventoryItemUpdateRequest
@@ -34,6 +35,14 @@ interface InventoryApi {
         @Path("household_id") householdId: Int,
         @Path("product_id") productId: Int,
         @Body request: InventoryItemUpdateRequest
+    ): InventoryItemResponse
+
+    @POST("households/{household_id}/inventory/{product_id}/adjust")
+    suspend fun adjustInventoryItem(
+        @Header("Authorization") authorization: String,
+        @Path("household_id") householdId: Int,
+        @Path("product_id") productId: Int,
+        @Body request: InventoryQuantityChangeRequest
     ): InventoryItemResponse
 
     @DELETE("households/{household_id}/inventory/{product_id}")

@@ -2,6 +2,8 @@ import pytest
 
 from app.api import ocr as ocr_module
 
+pytestmark = pytest.mark.usefixtures("catalog_auth")
+
 
 def mock_ocr_service(monkeypatch, *, result=None, error=None):
     """Подменяет OCR-сервис, не вызывая MinerU и LLM."""

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.schemas.ocr import OCRResponse
 from app.services.ocr_service import OCRService
 from app.db.database import get_db
+from app.security import get_current_user
 
 router = APIRouter(
     prefix="/ocr",
@@ -26,6 +27,7 @@ ALLOWED_TYPES = {
 async def recognize_receipt(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(

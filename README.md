@@ -109,9 +109,9 @@ docker compose up --build
 - Backend Swagger: http://localhost:8000/docs
 - Backend root: http://localhost:8000/
 - ML health: http://localhost:8001/health
-- PostgreSQL на хосте: `localhost:5433`, внутри Compose-сети: `postgres:5432`.
+- PostgreSQL на хосте: `127.0.0.1:5433`, внутри Compose-сети: `postgres:5432`.
 
-Compose выполняет `alembic upgrade head` перед запуском backend. Первый build ML-образа и первая загрузка моделей могут занимать много времени. Для просмотра логов:
+Compose выполняет `alembic upgrade head` перед запуском backend. Для запуска на своём сервере скопируйте корневой `.env.example` в `.env`, задайте свои `SECRET_KEY` и пароль PostgreSQL, затем соберите Android с адресом API по [инструкции](android/README.md). Первый build ML-образа и первая загрузка моделей могут занимать много времени. Для просмотра логов:
 
 ```powershell
 docker compose logs -f backend
@@ -148,7 +148,7 @@ ollama pull qwen2.5:7b-instruct
 Можно использовать Compose только для базы:
 
 ```powershell
-docker compose up -d postgres
+docker compose up -d --wait postgres
 ```
 
 ### 2. Backend
@@ -162,13 +162,13 @@ python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Проверьте `backend/.env`: `DATABASE_URL` должен указывать на PostgreSQL хоста, например `postgresql://smart_pantry:smart_pantry_password@localhost:5433/smart_pantry`, а `SECRET_KEY` нужно заменить на случайную строку не короче 32 байт.
+Проверьте `backend/.env`: `DATABASE_URL` должен указывать на PostgreSQL хоста, например `postgresql://smart_pantry:smart_pantry_password@127.0.0.1:5433/smart_pantry`, а `SECRET_KEY` нужно заменить на случайную строку не короче 32 байт.
 
 Запуск миграций и сервера:
 
 ```powershell
-alembic upgrade head
-python -m uvicorn app.main:app --reload
+python -m alembic upgrade head
+.\run_local.ps1
 ```
 
 ### 3. ML OCR-сервис
@@ -190,7 +190,7 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8001 --reload
 
 ### 4. Проверка OCR
 
-Откройте http://localhost:8000/docs и вызовите `POST /ocr/receipts`, передав JPG/PNG/WebP не более 10 MiB. Для прямой проверки ML-сервиса:
+Откройте http://localhost:8000/docs и вызовите `POST /ocr/receipts` с access-токеном, передав JPG/PNG/WebP не более 10 MiB. Для прямой проверки ML-сервиса:
 
 ```powershell
 curl.exe http://127.0.0.1:8001/health
@@ -203,21 +203,16 @@ curl.exe -X POST "http://127.0.0.1:8001/ocr" -F "file=@ml/test_images/receipt_01
 
 ### Backend API-тесты
 
-Тесты используют отдельную БД, указанную в `backend/.env.test`. Перед первым запуском создайте БД `smart_pantry_test`:
+Из корня репозитория запустите отдельный тестовый PostgreSQL. После установки зависимостей backend:
 
 ```powershell
-docker exec -it smart-pantry-postgres psql -U smart_pantry -d smart_pantry -c "CREATE DATABASE smart_pantry_test;"
-```
-
-Если база уже существует, команду повторять не нужно. Затем:
-
-```powershell
+docker compose --profile test up -d --wait postgres-test
 cd backend
 .\.venv\Scripts\Activate.ps1
-python -m pytest tests -v
+python -m pytest tests -q
 ```
 
-Тесты удаляют и создают таблицы в тестовой БД. **Не указывайте в `.env.test` URL рабочей БД.**
+Контейнер слушает порт 5434. Адрес подключения задан как `TEST_DATABASE_URL` в `backend/.env.test`. Каждый прогон создаёт собственную схему, применяет миграции Alembic и удаляет эту схему после тестов. [Подробнее о тестах](backend/tests/README.md).
 
 ### ML / парсер
 

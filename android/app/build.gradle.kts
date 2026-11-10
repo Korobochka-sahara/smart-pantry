@@ -4,6 +4,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val pantryApiBaseUrl = providers.gradleProperty("pantryApiBaseUrl")
+    .orElse("http://10.0.2.2:8000/").get().trim().trimEnd('/') + "/"
+require(pantryApiBaseUrl.startsWith("http://") || pantryApiBaseUrl.startsWith("https://")) {
+    "pantryApiBaseUrl must start with http:// or https://"
+}
+
 android {
     namespace = "com.smartpantry.app"
     compileSdk {
@@ -13,6 +19,8 @@ android {
     }
 
     defaultConfig {
+        buildConfigField("String", "API_BASE_URL", "\"${pantryApiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("boolean", "OCR_UI_MOCK", providers.gradleProperty("pantryOcrMock").orElse("false").get().toBoolean().toString())
         applicationId = "com.smartpantry.app"
         minSdk = 26
         targetSdk = 36
@@ -37,6 +45,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

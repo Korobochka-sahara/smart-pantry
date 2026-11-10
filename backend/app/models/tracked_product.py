@@ -1,6 +1,7 @@
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Integer, DateTime, func, text
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, Numeric, DateTime, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -21,8 +22,8 @@ class TrackedProduct(Base):
         primary_key=True,
     )
 
-    minimum_quantity: Mapped[int] = mapped_column(
-        Integer,
+    minimum_quantity: Mapped[Decimal] = mapped_column(
+        Numeric(10, 3),
         server_default=text("1"),
         nullable=False,
     )
@@ -38,4 +39,8 @@ class TrackedProduct(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint('minimum_quantity > 0', name='ck_tracked_minimum_positive'),
     )

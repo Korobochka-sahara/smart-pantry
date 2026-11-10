@@ -1,5 +1,6 @@
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.models.product import Product
 from app.schemas.product import ProductCreate
@@ -9,33 +10,6 @@ from app.services.auxiliary_functions import ProductConflictError
 
 def normalize_text(value: str) -> str:
     return " ".join(value.strip().split())
-
-
-def search_products(
-    db: Session,
-    query: str,
-) -> list[Product]:
-
-    query = normalize_text(query)
-
-    if not query:
-        return []
-
-    search_pattern = f"%{query}%"
-
-    stmt = (
-        select(Product)
-        .where(
-            or_(
-                Product.name.ilike(search_pattern),
-                Product.brand.ilike(search_pattern),
-                Product.barcode.ilike(search_pattern),
-            )
-        )
-        .order_by(Product.name)
-    )
-
-    return list(db.scalars(stmt).all())
 
 
 def create_product(
@@ -81,7 +55,13 @@ def create_product(
     )
 
     db.add(product)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) == "23505":
+            raise ProductConflictError("Product with this barcode already exists") from error
+        raise
     db.refresh(product)
 
     return product

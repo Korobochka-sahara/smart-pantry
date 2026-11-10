@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Enum, Numeric, String, func, text, Integer
+from sqlalchemy import CheckConstraint, Computed, Text, DateTime, Enum, Index, Numeric, String, func, text, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -85,4 +85,17 @@ class Product(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    search_text: Mapped[str] = mapped_column(
+        Text,
+        Computed("lower(replace(name || ' ' || coalesce(brand, ''), 'ё', 'е'))", persisted=True),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("ix_product_search_trgm", "search_text", postgresql_using="gist",
+              postgresql_ops={"search_text": "gist_trgm_ops"}),
+        CheckConstraint('package_quantity > 0', name='ck_product_package_positive'),
+        CheckConstraint('length(trim(name)) > 0', name='ck_product_name_not_blank'),
     )

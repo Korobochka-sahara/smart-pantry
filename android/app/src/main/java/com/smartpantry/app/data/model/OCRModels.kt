@@ -7,10 +7,11 @@ data class OCRCandidate(
     val product_id: Int,
     val name: String,
     val brand: String? = null,
-    val category: String,
-    val unit: String,
+    val category: ProductCategory,
+    val unit: ProductUnit,
+    @Serializable(with = DecimalQuantitySerializer::class)
     val package_quantity: Double,
-    val package_unit: String? = null,
+    val package_unit: ProductUnit? = null,
     val score: Double
 )
 
@@ -20,10 +21,12 @@ data class OCRItem(
     val item_code: String? = null,
     val name: String,
     val brand: String? = null,
+    @Serializable(with = DecimalQuantitySerializer::class)
     val quantity: Double? = null,
-    val unit: String? = null,
+    val unit: ProductUnit? = null,
+    @Serializable(with = DecimalQuantitySerializer::class)
     val package_quantity: Double? = null,
-    val package_unit: String? = null,
+    val package_unit: ProductUnit? = null,
     val candidates: List<OCRCandidate> = emptyList()
 )
 

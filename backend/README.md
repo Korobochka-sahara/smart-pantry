@@ -20,7 +20,7 @@ FastAPI-приложение Smart Pantry: HTTP API, аутентификаци�
 
 ## Локальный запуск (PowerShell)
 
-Из корня репозитория:
+Из корня репозитория запустите PostgreSQL командой docker compose up -d --wait postgres. Затем настройте Python:
 
 ```powershell
 cd backend
@@ -29,11 +29,11 @@ py -3.11 -m venv .venv
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 # Отредактируй .env: DATABASE_URL и SECRET_KEY
-alembic upgrade head
+python -m alembic upgrade head
 .\run_local.ps1
 ```
 
-Swagger: http://127.0.0.1:8000/docs. PostgreSQL должен быть запущен. По умолчанию локальная конфигурация ожидает `localhost:5433`.
+Swagger: http://127.0.0.1:8000/docs. PostgreSQL должен быть запущен. По умолчанию локальная конфигурация ожидает `127.0.0.1:5433`.
 
 ## Переменные окружения
 
@@ -44,4 +44,12 @@ Swagger: http://127.0.0.1:8000/docs. PostgreSQL должен быть запущ
 
 ## Тесты
 
-Тесты используют `backend/.env.test`, а не `.env`. Инструкции — в `tests/README.md`. Не направляй тестовую конфигурацию на рабочую БД.
+Запустите `docker compose --profile test up -d --wait postgres-test` из корня проекта. Затем выполните `python -m pytest tests -q` из каталога backend с активным окружением. Тесты используют `TEST_DATABASE_URL` из `.env.test` и применяют миграции к отдельной схеме. [Подробнее](tests/README.md).
+
+## Поведение API
+
+- Access-токен используется для защищённых запросов. Refresh-токен обновляет сессию. Для `POST /products` и `POST /ocr/receipts` нужен access-токен.
+- Пополнение прибавляет количество в PostgreSQL одной операцией. Маршрут `POST /households/{household_id}/inventory/{product_id}/adjust` принимает `delta`. При списании остаток ограничивается нулём.
+- При ручной установке остатка Android отправляет `expected_quantity`. Если остаток уже изменился, API возвращает 409.
+- Остатки, пороги и количество в упаковке поддерживают три знака после запятой. Единицы измерения проверяются по перечислению, названия очищаются от лишних пробелов. Одинаковые имена пользователей разрешены, email уникален.
+- Поиск по названию и бренду отбирает кандидатов в PostgreSQL, затем ранжирует их в Python. Сопоставление позиций чека использует текстовое описание товара.

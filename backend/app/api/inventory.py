@@ -7,6 +7,7 @@ from app.schemas.inventory_item import (
     InventoryItemCreate,
     InventoryItemResponse,
     InventoryItemUpdate,
+    InventoryQuantityChange,
 )
 from app.security import get_current_user
 from app.services.inventory_service import (
@@ -15,10 +16,12 @@ from app.services.inventory_service import (
     get_household_inventory,
     get_inventory_item,
     update_inventory_item,
+    change_inventory_quantity,
 )
 from app.services.auxiliary_functions import (
     HouseholdPermissionError,
     InventoryNotFoundError,
+    InventoryConflictError,
     ProductNotFoundError,
     require_household_access,
 )
@@ -80,6 +83,9 @@ def get_inventory_item_endpoint(
             detail=str(error),
         )
 
+    except InventoryConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+
     except InventoryNotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -118,6 +124,28 @@ def create_inventory_item_endpoint(
             detail=str(error),
         )
 
+    except InventoryConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+
+
+@router.post("/{product_id}/adjust", response_model=InventoryItemResponse)
+def adjust_inventory_item(
+    data: InventoryQuantityChange,
+    household_id: int = Path(gt=0),
+    product_id: int = Path(gt=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return change_inventory_quantity(db, household_id, current_user.id, product_id, data.delta)
+    except HouseholdPermissionError as error:
+        raise HTTPException(status_code=403, detail=str(error))
+    except InventoryConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error))
+
+    except InventoryNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+
 
 @router.patch(
     "/{product_id}",
@@ -144,6 +172,9 @@ def update_inventory_item_endpoint(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),
         )
+
+    except InventoryConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error))
 
     except InventoryNotFoundError as error:
         raise HTTPException(
@@ -175,6 +206,9 @@ def delete_inventory_item_endpoint(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),
         )
+
+    except InventoryConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error))
 
     except InventoryNotFoundError as error:
         raise HTTPException(

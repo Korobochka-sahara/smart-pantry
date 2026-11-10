@@ -528,7 +528,7 @@ fun TrackedProductsScreen(
                                 try {
                                     ApiClient.trackedProductApi.addTrackedProduct(
                                         "Bearer ${tokenOrThrow()}", household.id,
-                                        TrackedProductCreateRequest(product.id, 1)
+                                        TrackedProductCreateRequest(product.id, 1.0)
                                     )
                                     searchResults = emptyList()
                                     search = ""
@@ -571,27 +571,27 @@ fun TrackedProductsScreen(
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(product?.name ?: "Продукт #${item.product_id}", style = MaterialTheme.typography.titleMedium)
                             product?.brand?.let { Text(it) }
-                            Text("Минимальный запас: ${item.minimum_quantity} ${product?.unit.orEmpty()}")
+                            Text("Минимальный запас: ${item.minimum_quantity} ${product?.unit?.value.orEmpty()}")
                             when {
                                 current == 0.0 -> {
                                     Text(
                                         "Нет в запасах · нужно добавить " +
-                                                "${missing.toInt()} ${product?.unit.orEmpty()}",
+                                                "${missing.toString().removeSuffix(".0")} ${product?.unit?.value.orEmpty()}",
                                         color = MaterialTheme.colorScheme.error
                                     )
                                 }
 
                                 current < minimum -> {
                                     Text(
-                                        "Сейчас: $current ${product?.unit.orEmpty()} · " +
-                                                "не хватает $missing ${product?.unit.orEmpty()}",
+                                        "Сейчас: $current ${product?.unit?.value.orEmpty()} · " +
+                                                "не хватает $missing ${product?.unit?.value.orEmpty()}",
                                         color = MaterialTheme.colorScheme.error
                                     )
                                 }
 
                                 else -> {
                                     Text(
-                                        "Сейчас: $current ${product?.unit.orEmpty()} · Запаса достаточно",
+                                        "Сейчас: $current ${product?.unit?.value.orEmpty()} · Запаса достаточно",
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
@@ -600,12 +600,12 @@ fun TrackedProductsScreen(
                                 value = minimumText,
                                 onValueChange = { minimums = minimums + (item.product_id to it) },
                                 label = { Text("Новый минимальный запас") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(enabled = !working && minimumText.toIntOrNull()?.let { it > 0 } == true,
+                                Button(enabled = !working && minimumText.replace(',', '.').toDoubleOrNull()?.let { it.isFinite() && it > 0 } == true,
                                     onClick = {
                                         scope.launch {
                                             working = true
@@ -613,7 +613,7 @@ fun TrackedProductsScreen(
                                             try {
                                                 ApiClient.trackedProductApi.updateTrackedProduct(
                                                     "Bearer ${tokenOrThrow()}", household.id, item.product_id,
-                                                    com.smartpantry.app.data.model.TrackedProductUpdateRequest(minimumText.toInt())
+                                                    com.smartpantry.app.data.model.TrackedProductUpdateRequest(minimumText.replace(',', '.').toDouble())
                                                 )
                                                 refreshKey++
                                             } catch (e: Exception) { error = "Не удалось сохранить порог: ${e.message}" }
@@ -650,7 +650,7 @@ fun TrackedProductsScreen(
                     val product = productNames[item.product_id]
 
                     "${product?.name ?: "Продукт #${item.product_id}"} — " +
-                            "${missing.toString().removeSuffix(".0")} ${product?.unit.orEmpty()}"
+                            "${missing.toString().removeSuffix(".0")} ${product?.unit?.value.orEmpty()}"
                 } else {
                     null
                 }

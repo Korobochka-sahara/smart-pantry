@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, func, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Numeric, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -45,4 +45,8 @@ class InventoryItem(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint('quantity >= 0', name='ck_inventory_quantity_nonnegative'),
     )

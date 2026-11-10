@@ -6,7 +6,8 @@ import kotlinx.serialization.Serializable
 data class TrackedProductResponse(
     val household_id: Int,
     val product_id: Int,
-    val minimum_quantity: Int,
+    @Serializable(with = DecimalQuantitySerializer::class)
+    val minimum_quantity: Double,
     val created_at: String,
     val updated_at: String
 )
@@ -14,18 +15,22 @@ data class TrackedProductResponse(
 @Serializable
 data class TrackedProductCreateRequest(
     val product_id: Int,
-    val minimum_quantity: Int = 1
+    @Serializable(with = DecimalQuantitySerializer::class)
+    val minimum_quantity: Double = 1.0
 )
 
 @Serializable
 data class TrackedProductUpdateRequest(
-    val minimum_quantity: Int
+    @Serializable(with = DecimalQuantitySerializer::class)
+    val minimum_quantity: Double
 )
 
 @Serializable
 data class LowStockItemResponse(
     val household_id: Int,
     val product_id: Int,
-    val minimum_quantity: Int,
+    @Serializable(with = DecimalQuantitySerializer::class)
+    val minimum_quantity: Double,
+    @Serializable(with = DecimalQuantitySerializer::class)
     val current_quantity: Double
 )

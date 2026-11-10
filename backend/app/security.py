@@ -29,7 +29,8 @@ def create_access_token(user_id: int) -> str:
 
     payload = {
         "sub": str(user_id),
-        "exp": expire
+        "exp": expire,
+        "type": "access",
     }
 
     return jwt.encode(
@@ -60,7 +61,8 @@ def decode_refresh_token(token: str, db: Session) -> int:
         payload = jwt.decode(
             token,
             SECRET_KEY,
-            algorithms=[ALGORITHM]
+            algorithms=[ALGORITHM],
+            options={"require": ["exp", "sub", "type"]},
         )
 
         # Проверка на то что это рефреш
@@ -83,7 +85,7 @@ def decode_refresh_token(token: str, db: Session) -> int:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         refresh_token_record = db.query(RefreshToken).filter(
             RefreshToken.token_hash == token_hash
-        ).first()
+        ).with_for_update().populate_existing().first()
 
         if refresh_token_record is None:
             raise HTTPException(
@@ -124,24 +126,29 @@ def get_current_user(
         payload = jwt.decode(
             token,
             SECRET_KEY,
-            algorithms=[ALGORITHM]
+            algorithms=[ALGORITHM],
+            options={"require": ["exp", "sub", "type"]},
         )
 
         user_id = payload.get("sub")
 
-        if user_id is None:
+        if user_id is None or payload.get("type") != "access":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token",
             )
 
-    except InvalidTokenError:
+        user_id = int(user_id)
+        if user_id <= 0:
+            raise ValueError("Invalid subject")
+
+    except (InvalidTokenError, ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         )
 
-    user = db.get(User, int(user_id))
+    user = db.get(User, user_id)
 
     if user is None:
         raise HTTPException(

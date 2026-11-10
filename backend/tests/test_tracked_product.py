@@ -1,3 +1,8 @@
+import pytest
+from decimal import Decimal
+
+pytestmark = pytest.mark.usefixtures("catalog_auth")
+
 # =========================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (сохранена исходная структура)
 # =========================================================
@@ -44,9 +49,9 @@ def create_product(
     name="Milk",
     brand="Prostokvashino",
     category="dairy",
-    unit="L",
+    unit="l",
     package_quantity=1,
-    package_unit="L",
+    package_unit="l",
 ):
     response = client.post(
         "/products",
@@ -108,7 +113,7 @@ def test_create_tracked_product(client):
 
     assert data["household_id"] == household["id"]
     assert data["product_id"] == product["id"]
-    assert data["minimum_quantity"] == 3
+    assert Decimal(data["minimum_quantity"]) == Decimal("3")
     assert "created_at" in data
     assert "updated_at" in data
 
@@ -126,7 +131,7 @@ def test_create_tracked_product_with_default_minimum_quantity(client):
 
     assert response.status_code == 201
     data = response.json()
-    assert data["minimum_quantity"] == 1
+    assert Decimal(data["minimum_quantity"]) == Decimal("1")
 
 
 def test_create_tracked_product_with_nonexistent_product(client):
@@ -226,7 +231,7 @@ def test_get_tracked_product(client):
     assert len(data) == 1
     assert data[0]["household_id"] == household["id"]
     assert data[0]["product_id"] == product["id"]
-    assert data[0]["minimum_quantity"] == 4
+    assert Decimal(data[0]["minimum_quantity"]) == Decimal("4")
 
 
 def test_get_tracked_products_empty(client):
@@ -268,9 +273,9 @@ def test_get_multiple_tracked_products(client):
 
     assert len(data) == 2
     assert data[0]["product_id"] == product1["id"]
-    assert data[0]["minimum_quantity"] == 2
+    assert Decimal(data[0]["minimum_quantity"]) == Decimal("2")
     assert data[1]["product_id"] == product2["id"]
-    assert data[1]["minimum_quantity"] == 5
+    assert Decimal(data[1]["minimum_quantity"]) == Decimal("5")
 
 
 def test_get_tracked_product_from_list_by_product_id(client):
@@ -311,7 +316,7 @@ def test_update_tracked_product(client):
     data = response.json()
 
     assert data["product_id"] == product["id"]
-    assert data["minimum_quantity"] == 10
+    assert Decimal(data["minimum_quantity"]) == Decimal("10")
 
 
 def test_update_tracked_product_with_zero_minimum_quantity(client):
@@ -505,8 +510,8 @@ def test_get_low_stock_products(client):
     assert len(data) == 1
     assert data[0]["household_id"] == household["id"]
     assert data[0]["product_id"] == product["id"]
-    assert data[0]["minimum_quantity"] == 5
-    assert data[0]["current_quantity"] == 0.0
+    assert Decimal(data[0]["minimum_quantity"]) == Decimal("5")
+    assert Decimal(data[0]["current_quantity"]) == Decimal("0.0")
 
 
 def test_product_is_not_low_stock_when_quantity_is_above_minimum(client):
@@ -556,8 +561,8 @@ def test_product_is_low_stock_when_quantity_is_below_minimum(client):
 
     assert len(data) == 1
     assert data[0]["product_id"] == product["id"]
-    assert data[0]["minimum_quantity"] == 5
-    assert data[0]["current_quantity"] == 2.0
+    assert Decimal(data[0]["minimum_quantity"]) == Decimal("5")
+    assert Decimal(data[0]["current_quantity"]) == Decimal("2.0")
 
 
 def test_product_is_not_low_stock_when_quantity_equals_minimum(client):
@@ -597,7 +602,7 @@ def test_low_stock_uses_zero_for_missing_inventory(client):
     data = response.json()
 
     assert len(data) == 1
-    assert data[0]["current_quantity"] == 0.0
+    assert Decimal(data[0]["current_quantity"]) == Decimal("0.0")
 
 
 def test_low_stock_returns_only_low_products(client):
@@ -620,9 +625,9 @@ def test_low_stock_returns_only_low_products(client):
         name="Juice",
         brand="Rich",
         category="drinks",
-        unit="L",
+        unit="l",
         package_quantity=1,
-        package_unit="L",
+        package_unit="l",
     )
 
     create_tracked_product(client, token, household["id"], product1["id"], minimum_quantity=5)
@@ -657,8 +662,8 @@ def test_low_stock_returns_only_low_products(client):
 
     assert len(data) == 1
     assert data[0]["product_id"] == product1["id"]
-    assert data[0]["minimum_quantity"] == 5
-    assert data[0]["current_quantity"] == 2.0
+    assert Decimal(data[0]["minimum_quantity"]) == Decimal("5")
+    assert Decimal(data[0]["current_quantity"]) == Decimal("2.0")
 
 
 def test_user_cannot_access_low_stock_of_another_household(client):

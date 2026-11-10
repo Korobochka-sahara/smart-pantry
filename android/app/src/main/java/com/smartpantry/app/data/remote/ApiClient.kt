@@ -20,7 +20,7 @@ import java.io.IOException
 import com.smartpantry.app.data.remote.OCRApi
 
 object ApiClient {
-    private const val BASE_URL = "http://10.0.2.2:8000/"
+    private const val BASE_URL = com.smartpantry.app.BuildConfig.API_BASE_URL
     private const val REFRESH_PATH = "auth/refresh"
     private val json = Json { ignoreUnknownKeys = true }
     @Volatile private var appContext: Context? = null

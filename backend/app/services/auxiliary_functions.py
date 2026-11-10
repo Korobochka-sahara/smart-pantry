@@ -15,7 +15,7 @@ class HouseholdNotFoundError(Exception):
     pass
 
 
-class HouseholdMemberNotFoundError(Exception):
+class HouseholdMemberNotFoundError(HouseholdNotFoundError):
     pass
 
 
@@ -36,6 +36,10 @@ class TrackedProductConflictError(Exception):
 
 
 class ProductNotFoundError(Exception):
+    pass
+
+
+class InventoryConflictError(Exception):
     pass
 
 
@@ -78,10 +82,10 @@ def require_household_access(
 
 
 def require_household_role(
-    member: HouseholdMember,
+    member: HouseholdMember | None,
     *allowed_roles: HouseholdRole,
 ) -> None:
-    if member.role not in allowed_roles:
+    if member is None or member.role not in allowed_roles:
         raise HouseholdPermissionError(
             "You do not have permission to perform this action"
         )

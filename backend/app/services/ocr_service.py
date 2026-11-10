@@ -88,7 +88,8 @@ class OCRService:
         matched = 0
 
         for idx, item in enumerate(parsed_items, start=1):
-            candidates = find_product_candidates(
+            candidates = await run_in_threadpool(
+                find_product_candidates,
                 db=db,
                 receipt_item=item,
                 limit=3,

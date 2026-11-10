@@ -1,4 +1,6 @@
+from decimal import Decimal
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.household_member import HouseholdMember
@@ -87,7 +89,13 @@ def create_tracked_product(
     )
 
     db.add(tracked_product)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) == "23505":
+            raise TrackedProductConflictError("Product is already being tracked") from error
+        raise
     db.refresh(tracked_product)
 
     return tracked_product
@@ -157,7 +165,7 @@ def delete_tracked_product(
 def get_low_stock_products(
     db: Session,
     household_id: int,
-) -> list[tuple[TrackedProduct, float]]:
+) -> list[tuple[TrackedProduct, Decimal]]:
 
     current_quantity = func.coalesce(
         InventoryItem.quantity,
@@ -187,6 +195,6 @@ def get_low_stock_products(
     )
 
     return [
-        (tracked_product, float(quantity))
+        (tracked_product, quantity)
         for tracked_product, quantity in db.execute(stmt).all()
     ]

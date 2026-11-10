@@ -4,50 +4,37 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
+sys.path.insert(0, str(BASE_DIR.parent))
+
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 import pytest
-from dotenv import load_dotenv
+from uuid import uuid4
+from dotenv import dotenv_values
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from alembic import command
+from alembic.config import Config
+from app.db.test_safety import validate_test_database_url
 
-# ---------------------------------------------------------
-# 1. Загружаем настройки тестовой БД
-# ---------------------------------------------------------
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-ENV_TEST_FILE = BASE_DIR / ".env.test"
-
-load_dotenv(ENV_TEST_FILE, override=True)
-
-TEST_DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not TEST_DATABASE_URL:
-    raise RuntimeError(
-        f"DATABASE_URL is not set. Expected .env.test at: {ENV_TEST_FILE}"
-    )
-
-if TEST_DATABASE_URL.startswith("postgresql://"):
-    TEST_DATABASE_URL = TEST_DATABASE_URL.replace(
-        "postgresql://",
-        "postgresql+psycopg://",
-        1,
-    )
-
-
-# ---------------------------------------------------------
-# 2. Тестовый engine и тестовые сессии
-# ---------------------------------------------------------
-
-test_engine = create_engine(TEST_DATABASE_URL)
-
-TestingSessionLocal = sessionmaker(
-    bind=test_engine,
-    autoflush=False,
-    autocommit=False,
+# Read without overwriting an explicitly supplied test URL (e.g. CI).
+settings = dotenv_values(BASE_DIR / ".env.test")
+application_url = os.getenv("DATABASE_URL") or dotenv_values(BASE_DIR / ".env").get("DATABASE_URL")
+TEST_DATABASE_URL = validate_test_database_url(
+    os.getenv("TEST_DATABASE_URL") or settings.get("TEST_DATABASE_URL"), application_url
 )
+# Only this pytest process points application imports at the TEST database.
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL.render_as_string(hide_password=False)
+os.environ["SECRET_KEY"] = settings["SECRET_KEY"]
+
+# Each run owns a freshly generated schema. No pre-existing schema is cleared.
+TEST_SCHEMA = "pantry_test_" + uuid4().hex
+test_engine = create_engine(TEST_DATABASE_URL, connect_args={
+    "options": f"-csearch_path={TEST_SCHEMA},public"
+})
+TestingSessionLocal = sessionmaker(bind=test_engine, autoflush=False, autocommit=False)
 
 
 # ---------------------------------------------------------
@@ -80,12 +67,19 @@ from app.main import app
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
-    Base.metadata.create_all(bind=test_engine)
-
-    yield
-
-    Base.metadata.drop_all(bind=test_engine)
-    test_engine.dispose()
+    with test_engine.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{TEST_SCHEMA}"'))
+    try:
+        # Exercise every migration from base to head, rather than create_all().
+        config = Config(str(BASE_DIR / "alembic.ini"))
+        with test_engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
+        yield
+    finally:
+        with test_engine.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA "{TEST_SCHEMA}" CASCADE'))
+        test_engine.dispose()
 
 
 # ---------------------------------------------------------
@@ -93,7 +87,7 @@ def setup_database():
 # ---------------------------------------------------------
 
 @pytest.fixture(autouse=True)
-def clean_database():
+def clean_database(setup_database):
     db = TestingSessionLocal()
 
     try:
@@ -188,7 +182,7 @@ def create_household(client, auth_headers):
     return _create_household
 
 @pytest.fixture
-def create_product(client):
+def create_product(client, catalog_headers):
     def _create_product(
         barcode="4601234567890",
         name="Milk",
@@ -200,6 +194,7 @@ def create_product(client):
     ):
         response = client.post(
             "/products",
+            headers=catalog_headers,
             json={
                 "barcode": barcode, "name": name, "brand": brand,
                 "category": category, "unit": unit,
@@ -209,3 +204,20 @@ def create_product(client):
         assert response.status_code == 201
         return response.json()
     return _create_product
+
+@pytest.fixture
+def catalog_headers(db):
+    from app.models.user import User
+    from app.security import create_access_token
+    # Catalog fixtures do not change client.headers or another user's session.
+    user = User(email="catalog-fixture@example.com", username="catalog-fixture", password_hash="unused")
+    db.add(user)
+    db.commit()
+    return {"Authorization": "Bearer " + create_access_token(user.id)}
+
+
+@pytest.fixture
+def catalog_auth(client, catalog_headers):
+    client.headers.update(catalog_headers)
+    yield
+    client.headers.pop("Authorization", None)

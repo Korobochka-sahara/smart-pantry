@@ -131,6 +131,27 @@ def score_product(receipt_item: dict, product: Product) -> float:
     return round(name_score, 2)
 
 
+CANDIDATE_POOL_SIZE = 200
+
+
+def catalog_candidates(db: Session, query: str, count: int = CANDIDATE_POOL_SIZE) -> list[Product]:
+    """GiST trigram nearest-neighbor search; only a bounded pool reaches Python.
+
+    The generated search_text column is maintained and indexed by PostgreSQL.
+    No barcode is used to match receipt descriptions.
+    """
+    normalized_query = normalize_name(query)
+    if not normalized_query:
+        return []
+    search_text = Product.search_text
+    statement = (
+        select(Product)
+        .order_by(search_text.op("<->")(normalized_query), Product.id)
+        .limit(count)
+    )
+    return list(db.scalars(statement).all())
+
+
 def find_product_candidates(
     db: Session,
     receipt_item: dict,
@@ -139,7 +160,7 @@ def find_product_candidates(
 ) -> list[dict]:
     """Возвращает лучшие совпадения из каталога Product."""
 
-    products = db.scalars(select(Product)).all()
+    products = catalog_candidates(db, receipt_item.get("name", "") + " " + (receipt_item.get("brand") or ""))
     ranked = []
 
     for product in products:
@@ -174,38 +195,24 @@ def search_catalog_products(
     limit: int = 20,
     offset: int = 0,
 ) -> list[Product]:
-    """Ищет товары по названию, бренду или штрихкоду."""
+    """Ищет товары по названию и бренду, включая исправление OCR-ошибок."""
 
     normalized_query = normalize_name(query)
 
     if not normalized_query:
         return []
 
-    products = db.scalars(select(Product)).all()
+    products = catalog_candidates(db, normalized_query, max(CANDIDATE_POOL_SIZE, offset + limit))
     ranked = []
 
     for product in products:
         name = normalize_name(product.name)
         brand = normalized_brand(product.brand)
-        barcode = (product.barcode or "").strip().lower()
-
-        # Точное совпадение штрихкода — самый надёжный вариант.
-        if barcode and barcode == query.strip().lower():
-            score = 100.0
-        else:
-            # Сравниваем запрос с названием и брендом.
-            name_score = fuzz.WRatio(normalized_query, name)
-            brand_score = (
-                fuzz.WRatio(normalized_query, brand)
-                if brand
-                else 0.0
-            )
-
-            score = max(name_score, brand_score)
-
-            # Бонус за вхождение запроса в название или бренд.
-            if normalized_query in name or normalized_query in brand:
-                score = min(100.0, score + 5.0)
+        name_score = fuzz.WRatio(normalized_query, name)
+        brand_score = fuzz.WRatio(normalized_query, brand) if brand else 0.0
+        score = max(name_score, brand_score)
+        if normalized_query in name or normalized_query in brand:
+            score = min(100.0, score + 5.0)
 
         # Для ручного поиска допускаем более свободное совпадение.
         if score >= 30.0:

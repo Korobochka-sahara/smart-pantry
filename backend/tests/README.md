@@ -1,16 +1,20 @@
 # Backend tests
 
-Тесты используют `pytest`, `FastAPI TestClient` и отдельную PostgreSQL-базу, URL которой задаётся в `backend/.env.test`. В `conftest.py` создаются таблицы на время сессии, очищаются перед каждым тестом и подменяется dependency `get_db`.
+Тесты используют отдельный PostgreSQL.
+
+URL задаётся только через `TEST_DATABASE_URL`. Имя БД должно оканчиваться на `_test`, а адрес должен отличаться от рабочей БД. Каждый запуск создаёт собственную случайную схему, применяет все миграции от `base` до `head`, очищает только таблицы этой схемы и удаляет только её. Существующие схемы не очищаются; `drop_all()` больше не используется. Расширение `pg_trgm` остаётся в `public` тестовой БД.
 
 ## Подготовка
 
-Установи зависимости из `backend/requirements.txt`, запусти PostgreSQL и один раз создай тестовую БД, если её ещё нет:
+Из корня проекта:
 
 ```powershell
-docker exec -it smart-pantry-postgres psql -U smart_pantry -d smart_pantry -c "CREATE DATABASE smart_pantry_test;"
+docker compose --profile test up -d --wait postgres-test
 ```
 
-Проверь, что `DATABASE_URL` в `.env.test` указывает именно на `smart_pantry_test`. Никогда не запускай тесты против рабочей базы: фикстура очищает таблицы.
+Это отдельный контейнер PostgreSQL 16 на `127.0.0.1:5434` с БД `smart_pantry_test` и отдельным пользователем. Настройки уже указаны в `backend/.env.test`. Его данные временные: после остановки контейнера содержимое tmpfs исчезает. Рабочий PostgreSQL на порту 5433 для этих тестов не нужен.
+
+Для тестового PostgreSQL можно переопределить `TEST_DATABASE_URL` в окружении процесса. Потребуются права на создание схем и установку доверенного расширения `pg_trgm` в тестовой БД (либо заранее установленное расширение). Не используйте рабочую БД.
 
 ## Запуск
 
@@ -39,7 +43,7 @@ python -m pytest tests/test_ocr.py -v
 # 1. Auth — 9 тестов
 1. test_register_user — успешная регистрация пользователя.
 2. test_register_duplicate_email — нельзя зарегистрировать второго пользователя с тем же email.
-3. test_register_duplicate_username — нельзя зарегистрировать второго пользователя с тем же username.
+3. test_register_duplicate_username_is_allowed — одинаковые username разрешены, email остаётся уникальным.
 4. test_login_wrong_password — неправильный пароль не позволяет войти.
 5. test_login_success — успешный логин возвращает токены.
 6. test_get_current_user — авторизованный пользователь может получить свои данные через /auth/me.
@@ -79,7 +83,7 @@ python -m pytest tests/test_ocr.py -v
 5. test_get_nonexistent_product — получение несуществующего Product возвращает 404.
 6. test_search_product_by_name — поиск по названию.
 7. test_search_product_by_brand — поиск по бренду.
-8. test_search_product_by_barcode — поиск по barcode.
+8. test_search_product_by_receipt_description — поиск по текстовому описанию товара; barcode не участвует.
 9. test_search_product_case_insensitive — поиск не зависит от регистра.
 10. test_search_products_returns_multiple_results — поиск может вернуть несколько продуктов.
 
@@ -118,7 +122,7 @@ python -m pytest tests/test_ocr.py -v
 2. test_create_tracked_product_with_default_minimum_quantity — работает значение minimum_quantity по умолчанию.
 3. test_create_tracked_product_with_nonexistent_product — нельзя создать tracking для несуществующего Product.
 4. test_create_duplicate_tracked_product — нельзя дважды отслеживать один Product в household.
-5. test_create_tracked_product_with_zero_minimum_quantity — minimum_quantity = 0 разрешён.
+5. test_create_tracked_product_with_zero_minimum_quantity — minimum_quantity = 0 запрещён.
 6. test_create_tracked_product_with_negative_minimum_quantity — отрицательный minimum запрещён.
 7. test_create_tracked_product_with_invalid_product_id — некорректный product_id отклоняется.
 8. test_get_tracked_product — получение конкретного TrackedProduct.
@@ -126,7 +130,7 @@ python -m pytest tests/test_ocr.py -v
 10. test_get_multiple_tracked_products — получение нескольких tracked products.
 11. test_get_tracked_product_from_list_by_product_id — tracked product можно найти по product_id.
 12. test_update_tracked_product — изменение tracked product.
-13. test_update_tracked_product_with_zero_minimum_quantity — обновление minimum до 0.
+13. test_update_tracked_product_with_zero_minimum_quantity — обновление minimum до 0 запрещено.
 14. test_update_tracked_product_with_negative_minimum_quantity — отрицательный minimum при обновлении запрещён.
 15. test_update_nonexistent_tracked_product — обработка несуществующего tracked product.
 16. test_delete_tracked_product — удаление tracked product.

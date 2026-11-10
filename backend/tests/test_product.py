@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = pytest.mark.usefixtures("catalog_auth")
+
 # ---------------------------------------------------------
 # Создание
 # ---------------------------------------------------------
@@ -132,10 +136,10 @@ def test_search_product_by_brand(client, create_product):
     assert data[0]["brand"] == "Prostokvashino"
 
 
-def test_search_product_by_barcode(client, create_product):
+def test_search_product_by_receipt_description(client, create_product):
     create_product(barcode="4601234567890", name="Milk")
 
-    response = client.get("/products/search", params={"q": "4601234567890"})
+    response = client.get("/products/search", params={"q": "Milk"})
 
     assert response.status_code == 200
     data = response.json()

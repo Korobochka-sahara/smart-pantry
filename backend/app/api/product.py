@@ -10,7 +10,7 @@ from app.services.product_service import (
 from app.services.product_matching import search_catalog_products
 from app.services.auxiliary_functions import ProductConflictError
 
-from app.enums.category import ProductCategory
+from app.security import get_current_user
 
 router = APIRouter(
     prefix="/products",
@@ -28,7 +28,7 @@ def search(
         max_length=255,
     ),
     limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=1000),
     db: Session = Depends(get_db),
 ):
     return search_catalog_products(
@@ -47,6 +47,7 @@ def search(
 def create(
     product_data: ProductCreate,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     try:
         return create_product(db, product_data)
